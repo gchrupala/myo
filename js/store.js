@@ -23,15 +23,15 @@
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 2;
+export const SCHEMA = 3;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
 // From a Cybex selector panel: 13 plates labelled 10–112 lb and 4.5–52.5 kg.
 export const DEFAULT_PLATES = { count: 13, kgFirst: 4.5, kgStep: 4, lbFirst: 10, lbStep: 8.5 };
-// The add-on weight knob. Cybex documents 0/5/10/15 lb for 20 lb plates; for
-// these ~8.5 lb plates 0/2/4/6 lb is an assumption to be checked on the machine.
-export const DEFAULT_DIAL = { count: 4, step: 2, unit: 'lb' };
+// The add-on weight knob (Cybex Twist Select): its window shows 0, 5, 10, 15 lb
+// on the chin-up and dip machines. Other machines may differ.
+export const DEFAULT_DIAL = { count: 4, step: 5, unit: 'lb' };
 
 let seq = 0;
 export function newId(prefix) {
@@ -112,6 +112,8 @@ function parseField(f, schema) {
   if (f.kind === 'stack') {
     const plates = parsePlates(f.plates);
     const dial = parseDial(f.dial);
+    // Version 2 guessed 0/2/4/6 lb for the dial; the machines show 0/5/10/15.
+    if (schema < 3 && dial?.count === 4 && dial.step === 2 && dial.unit === 'lb') dial.step = DEFAULT_DIAL.step;
     return {
       id,
       kind: 'stack',

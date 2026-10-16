@@ -263,8 +263,8 @@ test('weight stack: labels, pin, dial and total', () => {
   S.setStackPlate(state, row.id, f.id, 5);
   assert.equal(S.stackTotalKg(f), 24.5);
   S.stepDial(state, row.id, f.id, 1);
-  assert.equal(S.dialValue(f), 2);
-  assert.equal(S.stackTotalKg(f), 25.4); // 24,5 kg + 2 lb
+  assert.equal(S.dialValue(f), 5);
+  assert.equal(S.stackTotalKg(f), 26.8); // 24,5 kg + 5 lb
   S.stepDial(state, row.id, f.id, 5);
   assert.equal(f.dialPos, 3);
   S.stepDial(state, row.id, f.id, -9);
@@ -277,8 +277,8 @@ test('weight stack: labels, pin, dial and total', () => {
   S.setStackPlate(state, row.id, f.id, 2);
   S.stepDial(state, row.id, f.id, 2);
   assert.deepEqual(S.fieldSnapshot(f), {
-    label: 'Ciężar', kind: 'stack', unit: 'kg', value: 14.3,
-    plate: 3, plateKg: 12.5, plateLb: 27, dial: 4, dialUnit: 'lb',
+    label: 'Ciężar', kind: 'stack', unit: 'kg', value: 17,
+    plate: 3, plateKg: 12.5, plateLb: 27, dial: 10, dialUnit: 'lb',
   });
 });
 
@@ -340,9 +340,30 @@ test('version 1 data: the default weight setting becomes a stack', () => {
   assert.equal(weight.kind, 'stack');
   assert.equal(weight.id, 'f1');
   assert.equal(S.plateWeights(weight, weight.value).kg, 40.5);
+  assert.deepEqual(weight.dial, { count: 4, step: 5, unit: 'lb' });
   assert.deepEqual(seat, { id: 'f2', kind: 'number', label: 'Siedzisko', unit: '', step: 1, value: 3 });
   assert.deepEqual(state.sets[0].settings, [{ label: 'Ciężar', unit: 'kg', value: 40 }]);
   assert.equal(state.schema, S.SCHEMA);
   // Saved again and reloaded, it stays as it is.
   assert.deepEqual(S.parseState(JSON.stringify(state)), state);
+});
+
+test('version 2 data: the guessed 0/2/4/6 lb dial becomes 0/5/10/15 lb', () => {
+  const stack = (id, dial) => ({
+    id, kind: 'stack', label: 'Ciężar', value: 3, dialPos: 1,
+    plates: { count: 13, kgFirst: 4.5, kgStep: 4, lbFirst: 10, lbStep: 8.5 }, dial,
+  });
+  const v2 = {
+    schema: 2,
+    machines: [{
+      id: 'm1', name: 'Podciąganie', type: 'strength', restTarget: 90,
+      fields: [stack('f1', { count: 4, step: 2, unit: 'lb' }), stack('f2', { count: 3, step: 1, unit: 'kg' })],
+    }],
+    sets: [],
+  };
+  const [guessed, custom] = S.parseState(v2).machines[0].fields;
+  assert.deepEqual(guessed.dial, { count: 4, step: 5, unit: 'lb' });
+  assert.equal(guessed.dialPos, 1);
+  assert.equal(S.dialValue(guessed), 5);
+  assert.deepEqual(custom.dial, { count: 3, step: 1, unit: 'kg' });
 });
