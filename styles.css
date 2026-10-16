@@ -1,0 +1,833 @@
+/* Layout: one phone-width column. Lists are plain rows on the page ground;
+   the exercise screen centres one large plate-shaped tap target, with its
+   controls in thumb reach right below it. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --line: #d2d8e0;
+  --ink: #12161c;
+  --muted: #566170;
+  --accent: #1f47c8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2e8fb;
+  --go: #e0a800;
+  --go-soft: #fbefc8;
+  --danger: #bf332d;
+
+  --font-display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif-condensed, sans-serif;
+  --font-num: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif-condensed, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius: 10px;
+  --tap: 3rem;
+
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1115;
+    --surface: #181c22;
+    --line: #2c333d;
+    --ink: #e8ecf1;
+    --muted: #9ba6b4;
+    --accent: #8098ff;
+    --accent-ink: #0a0f22;
+    --accent-soft: #1c2542;
+    --go: #f2c230;
+    --go-soft: #3a3112;
+    --danger: #ff7068;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1115;
+  --surface: #181c22;
+  --line: #2c333d;
+  --ink: #e8ecf1;
+  --muted: #9ba6b4;
+  --accent: #8098ff;
+  --accent-ink: #0a0f22;
+  --accent-soft: #1c2542;
+  --go: #f2c230;
+  --go-soft: #3a3112;
+  --danger: #ff7068;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 1rem/1.45 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Paints the strip under the phone status bar above the sticky header. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: var(--bg);
+}
+
+#app {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding-block: 0 3rem;
+}
+
+main {
+  display: grid;
+  gap: 1rem;
+  padding-block: 1rem 0;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- header ---------- */
+
+.bar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font: 800 1.9rem/1 var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.bar-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font: 800 1.5rem/1.1 var(--font-display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.tab {
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab[aria-current="page"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  margin-left: -0.75rem;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--tap);
+  padding: 0 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn.small {
+  min-height: 2.5rem;
+  padding: 0 0.8rem;
+}
+
+.btn.wide {
+  width: 100%;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.controls .grow {
+  flex: 1;
+}
+
+/* ---------- text bits ---------- */
+
+.section-title {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font: 600 0.8rem/1.2 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field-note,
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.notice {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.notice p {
+  margin: 0;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.unit {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.chevron {
+  color: var(--muted);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+/* ---------- "in progress" banner ---------- */
+
+.banner {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "label name chev"
+    "label status chev";
+  align-items: center;
+  gap: 0 0.75rem;
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.banner-label {
+  grid-area: label;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.banner-name {
+  grid-area: name;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.banner-status {
+  grid-area: status;
+  font-variant-numeric: tabular-nums;
+}
+
+.banner .chevron {
+  grid-area: chev;
+  color: inherit;
+}
+
+/* ---------- settings steppers ---------- */
+
+.settings,
+.body-weight {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.stepper {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.stepper button {
+  width: var(--tap);
+  min-height: var(--tap);
+  border: 0;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepper button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stepper input {
+  width: 5.5rem;
+  min-width: 0;
+  border: 0;
+  border-inline: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: 600 1.5rem/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.stepper input::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.body-weight {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.body-weight .stepper {
+  background: var(--bg);
+}
+
+/* ---------- machine list ---------- */
+
+.machines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.machine {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.machine-text {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.machine-name {
+  font: 700 1.55rem/1.05 var(--font-display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* Setting values look like the numbers stamped on a weight stack. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  padding: 0 0.45rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  font: 600 1.05rem/1.45 var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.machine-last {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---------- the plate ---------- */
+
+.plate-zone {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding-block: 0.25rem;
+}
+
+.plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(80vw, 19rem);
+  max-width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 80ms ease-out, background-color 200ms;
+}
+
+.plate:active {
+  transform: scale(0.97);
+}
+
+.plate-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-track,
+.ring {
+  fill: none;
+  stroke-width: 7;
+}
+
+.ring-track {
+  stroke: var(--line);
+}
+
+.ring {
+  stroke: var(--accent);
+  transition: stroke-dasharray 250ms linear;
+}
+
+.plate.is-paused .ring {
+  stroke: var(--muted);
+}
+
+.plate.is-done {
+  background: var(--go-soft);
+}
+
+.plate.is-done .ring {
+  stroke: var(--go);
+}
+
+.plate-face {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+}
+
+.plate-big {
+  font: 700 clamp(4.5rem, 26vw, 7rem)/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.plate-big.is-long {
+  font-size: clamp(3rem, 15vw, 4.5rem);
+}
+
+.plate-sub {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.plate-zone .hint {
+  min-height: 2.6em;
+  max-width: 22rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.plate-zone .controls {
+  width: 100%;
+}
+
+.plate-zone .controls .btn {
+  min-height: 3.5rem;
+  font-size: 1.1rem;
+}
+
+/* ---------- rest target ---------- */
+
+.rest-settings {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.segs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.seg {
+  flex: 1 0 3.5rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: 600 1.15rem/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.seg[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.check,
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.check input,
+.radio input {
+  width: 1.3rem;
+  height: 1.3rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* ---------- set lists ---------- */
+
+.log {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.set-row {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr auto;
+  grid-template-areas:
+    "n main del"
+    "n meta del";
+  align-items: center;
+  gap: 0 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.set-n {
+  grid-area: n;
+  color: var(--muted);
+  font: 600 1.1rem/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.set-main {
+  grid-area: main;
+  font: 600 1.3rem/1.2 var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.set-meta {
+  grid-area: meta;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.set-meta:empty {
+  display: none;
+}
+
+.set-del {
+  grid-area: del;
+  min-height: 2.5rem;
+  padding: 0 0.7rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.set-del.is-confirm {
+  border-color: var(--danger);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* The rest sits between the two sets it separates. */
+.rest-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0 0.3rem 2.35rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-row::before {
+  content: "";
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+  border: 2px solid var(--line);
+  border-top-color: var(--muted);
+  border-radius: 50%;
+}
+
+/* ---------- history ---------- */
+
+.day {
+  display: grid;
+  gap: 0.6rem;
+  padding-bottom: 0.75rem;
+}
+
+.day-title {
+  margin: 0.5rem 0 0;
+  font: 800 1.6rem/1.1 var(--font-display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.day-totals {
+  margin: -0.4rem 0 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.day-totals:empty {
+  display: none;
+}
+
+.block {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.block-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.empty {
+  padding: 1.5rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+
+.empty p {
+  margin: 0;
+  max-width: 34em;
+}
+
+.empty .empty-title {
+  margin-bottom: 0.4rem;
+  color: var(--ink);
+  font: 800 1.4rem/1.1 var(--font-display);
+  text-transform: uppercase;
+}
+
+.data {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- edit form ---------- */
+
+.edit {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.form-row {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.form-row > label,
+.form-row legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.edit input[type="text"] {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.draft-head,
+.draft-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.5rem 4rem var(--tap);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.draft-head {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.draft-field .icon-btn {
+  margin: 0;
+  font-size: 1.6rem;
+  color: var(--muted);
+}
+
+.danger-zone {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plate,
+  .ring {
+    transition: none;
+  }
+}
