@@ -25,7 +25,7 @@
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 7;
+export const SCHEMA = 8;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
@@ -67,9 +67,10 @@ function machine(name, type, fields) {
 // Stacks differ between machines. Cybex Eagle NX: a 10 lb top plate, then
 // 20 lb plates, labelled 4.5, 13.5, 22.5 … kg; it fits the overhead and chest
 // press readings. Abdominal and row read 67 kg, which is on neither stack;
-// 9 kg plates from 4 kg is an assumption until their panels are checked.
+// 9 kg plates from 4 kg is an assumption until their panels are checked, and
+// the lb labels are converted from it (9 lb, then 20 lb plates).
 const EAGLE_PLATES = { count: 12, kgFirst: 4.5, kgStep: 9, lbFirst: 10, lbStep: 20, zero: false };
-const HEAVY_PLATES = { count: 12, kgFirst: 4, kgStep: 9, lbFirst: 10, lbStep: 20, zero: false };
+const HEAVY_PLATES = { count: 12, kgFirst: 4, kgStep: 9, lbFirst: 9, lbStep: 20, zero: false };
 
 // Stacks and settings (plate kg + dial lb) from the session of 16 Oct 2026.
 const MACHINE_SETUP = {
@@ -143,7 +144,9 @@ function parseField(f, schema) {
     return s;
   }
   if (f.kind === 'stack') {
-    const plates = parsePlates(f.plates);
+    // Before version 8 kg and lb labels could disagree (the abdominal and row
+    // guess had 4 kg next to 10 lb).
+    const plates = schema < 8 ? reconcilePlates(parsePlates(f.plates)) : parsePlates(f.plates);
     const dial = parseDial(f.dial);
     // Version 2 guessed 0/2/4/6 lb for the dial; the machines show 0/5/10/15.
     if (schema < 3 && dial?.count === 4 && dial.step === 2 && dial.unit === 'lb') dial.step = DEFAULT_DIAL.step;
@@ -297,6 +300,22 @@ export function plateWeights(field, index) {
   return { kg: round(p.kgFirst + index * p.kgStep), lb: round(p.lbFirst + index * p.lbStep) };
 }
 
+// kg <-> lb for plate labels, rounded to 0.5 like the labels on machines.
+const half = (n) => Math.round(n * 2) / 2;
+export const kgToLb = (kg) => half(kg / LB_TO_KG);
+export const lbToKg = (lb) => half(lb * LB_TO_KG);
+
+// Labels printed on machines are rounded (the photographed stack pairs 4 kg
+// with 8.5 lb), so kg and lb may differ by up to 0.5 kg. Beyond that the lb
+// labels are taken from the kg ones.
+export const PLATE_TOLERANCE_KG = 0.5;
+export function reconcilePlates(plates) {
+  const p = { ...plates };
+  if (Math.abs(p.kgFirst - p.lbFirst * LB_TO_KG) > PLATE_TOLERANCE_KG) p.lbFirst = kgToLb(p.kgFirst);
+  if (Math.abs(p.kgStep - p.lbStep * LB_TO_KG) > PLATE_TOLERANCE_KG) p.lbStep = kgToLb(p.kgStep);
+  return p;
+}
+
 // The lowest position: -1 when the stack has a zero position, else 0.
 export const firstPosition = (field) => (field.plates.zero ? -1 : 0);
 
@@ -366,14 +385,16 @@ export function setRestTarget(state, machineId, seconds, now) {
 // A stack field from edit form strings, keeping what was set on the machine.
 function stackFromDraft(f, prev, label) {
   const num = (v) => parseNumber(v) ?? undefined;
-  const plates = parsePlates({
-    count: num(f.plates?.count),
-    kgFirst: num(f.plates?.kgFirst),
-    kgStep: num(f.plates?.kgStep),
-    lbFirst: num(f.plates?.lbFirst),
-    lbStep: num(f.plates?.lbStep),
-    zero: f.plates?.zero === true,
-  });
+  const plates = reconcilePlates(
+    parsePlates({
+      count: num(f.plates?.count),
+      kgFirst: num(f.plates?.kgFirst),
+      kgStep: num(f.plates?.kgStep),
+      lbFirst: num(f.plates?.lbFirst),
+      lbStep: num(f.plates?.lbStep),
+      zero: f.plates?.zero === true,
+    }),
+  );
   const dial = parseDial({ count: num(f.dial?.count), step: num(f.dial?.step), unit: f.dial?.unit });
   const s = { id: prev?.id ?? newId('f'), kind: 'stack', label, value: null, dialPos: 0, plates, dial };
   if (prev?.kind === 'stack') {

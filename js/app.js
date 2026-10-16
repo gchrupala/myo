@@ -1062,12 +1062,27 @@ app.addEventListener('input', (e) => {
     ui.draft.name = t.value;
     return;
   }
-  const f = ui.draft.fields[Number(t.dataset.i)];
+  const i = Number(t.dataset.i);
+  const f = ui.draft.fields[i];
   const [group, key] = prop.split('.');
   const value = t.type === 'checkbox' ? t.checked : t.value;
   if (key) f[group][key] = value;
   else f[group] = value;
+  if (group === 'plates') syncPlateUnits(f, key, i);
 });
+
+// The kg and lb labels of a plate describe the same weight: typing one fills
+// in the other, rounded to 0.5 like the labels on machines.
+const PLATE_PAIRS = { kgFirst: ['lbFirst', S.kgToLb], lbFirst: ['kgFirst', S.lbToKg], kgStep: ['lbStep', S.kgToLb], lbStep: ['kgStep', S.lbToKg] };
+function syncPlateUnits(f, key, i) {
+  const pair = PLATE_PAIRS[key];
+  const n = S.parseNumber(f.plates[key]);
+  if (!pair || n === null || n === undefined || n < 0) return;
+  const [other, convert] = pair;
+  f.plates[other] = formatNumber(convert(n));
+  const input = document.getElementById(`d-plates-${other}-${i}`);
+  if (input) input.value = f.plates[other];
+}
 
 // Enter closes the phone keyboard and saves the value.
 app.addEventListener('keydown', (e) => {

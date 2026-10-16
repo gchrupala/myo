@@ -478,3 +478,62 @@ test('version 6 data: chin-up and dips get the 0 kg position', () => {
   assert.deepEqual(['Podciąganie', 'Pompki na poręczach', 'Wiosłowanie'].map(zero), [true, true, false]);
   assert.equal(state.machines.find((m) => m.name === 'Podciąganie').fields[0].value, 3);
 });
+
+test('kg and lb labels: conversion and consistency', () => {
+  assert.equal(S.kgToLb(4.5), 10);
+  assert.equal(S.kgToLb(9), 20);
+  assert.equal(S.lbToKg(8.5), 4);
+  assert.equal(S.lbToKg(20), 9);
+  // The photographed panel (4 kg next to 8.5 lb) is within the tolerance and kept.
+  assert.deepEqual(S.reconcilePlates(S.DEFAULT_PLATES), S.DEFAULT_PLATES);
+  // A completely inconsistent pair takes the lb label from the kg one.
+  assert.deepEqual(
+    S.reconcilePlates({ count: 5, kgFirst: 20, kgStep: 4, lbFirst: 10, lbStep: 30, zero: false }),
+    { count: 5, kgFirst: 20, kgStep: 4, lbFirst: 44, lbStep: 9, zero: false },
+  );
+  // Every default stack is consistent.
+  for (const m of S.createState().machines) {
+    for (const f of m.fields.filter((x) => x.kind === 'stack')) {
+      assert.deepEqual(S.reconcilePlates(f.plates), f.plates, m.name);
+    }
+  }
+});
+
+test('saving an inconsistent stack from the edit form corrects the lb labels', () => {
+  const { state, row } = fresh();
+  const f = row.fields[0];
+  S.saveMachine(state, {
+    id: row.id, name: row.name, type: 'strength',
+    fields: [{ id: f.id, kind: 'stack', label: 'Ciężar', plates: { count: '12', kgFirst: '5', kgStep: '5', lbFirst: '50', lbStep: '11' }, dial: { count: '0' } }],
+  }, sec(0));
+  assert.deepEqual(row.fields[0].plates, { count: 12, kgFirst: 5, kgStep: 5, lbFirst: 11, lbStep: 11, zero: false });
+});
+
+test('chin-up and dips match the photo and the 16 Oct readings, with 0 kg', () => {
+  const { state } = fresh();
+  for (const [name, kg] of [['Podciąganie', 16.5], ['Pompki na poręczach', 8.5]]) {
+    const f = state.machines.find((m) => m.name === name).fields[0];
+    const kgLabels = Array.from({ length: f.plates.count + 1 }, (_, k) => S.plateWeights(f, k - 1).kg);
+    const lbLabels = Array.from({ length: f.plates.count + 1 }, (_, k) => S.plateWeights(f, k - 1).lb);
+    assert.deepEqual(kgLabels, [0, 4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5, 32.5, 36.5, 40.5, 44.5, 48.5, 52.5], name);
+    assert.deepEqual(lbLabels, [0, 10, 18.5, 27, 35.5, 44, 52.5, 61, 69.5, 78, 86.5, 95, 103.5, 112], name);
+    assert.equal(S.stackTotalKg(f), kg, name);
+  }
+  // Abdominal and row: 67 kg is a label, and its lb label agrees with it.
+  const row = state.machines.find((m) => m.name === 'Wiosłowanie').fields[0];
+  assert.deepEqual(S.plateWeights(row, row.value), { kg: 67, lb: 149 });
+});
+
+test('version 7 data: the abdominal and row guess gets matching lb labels', () => {
+  const v7 = S.createState();
+  for (const m of v7.machines) {
+    for (const f of m.fields) if (f.kind === 'stack' && f.plates.kgFirst === 4) f.plates.lbFirst = 10;
+  }
+  v7.schema = 7;
+  const state = S.parseState(JSON.stringify(v7));
+  const plates = (name) => state.machines.find((m) => m.name === name).fields[0].plates;
+  assert.equal(plates('Wiosłowanie').lbFirst, 9);
+  assert.equal(plates('Brzuch').lbFirst, 9);
+  assert.deepEqual(plates('Podciąganie'), { ...S.DEFAULT_PLATES, zero: true });
+  assert.equal(plates('Wyciskanie na klatkę').lbFirst, 10);
+});
