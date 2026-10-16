@@ -42,7 +42,8 @@ test('English', () => {
   });
   assert.equal(nameFor('Wiosłowanie'), 'Row');
   assert.equal(nameFor('Moja maszyna'), 'Moja maszyna');
-  assert.equal(t('hint.rest', { target: '1:30', n: 2 }), 'Target 1:30. Tap when you start set 2.');
+  assert.equal(t('hint.rest', { target: '1:30' }), 'Rest target: 1:30.');
+  assert.equal(t('ex.startSet', { n: 2 }), 'Start set 2');
 });
 
 test('Spanish', () => {

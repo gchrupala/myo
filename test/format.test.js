@@ -6,6 +6,7 @@ import {
   formatDuration,
   formatNumber,
   formatSettings,
+  restClock,
   setHeadline,
   summarizeSets,
 } from '../js/format.js';
@@ -17,6 +18,15 @@ test('formatDuration', () => {
   assert.equal(formatDuration(600), '10:00');
   assert.equal(formatDuration(3723), '1:02:03');
   assert.equal(formatDuration(-3), '0:00');
+});
+
+test('restClock counts down to the target, then shows the time over it', () => {
+  assert.equal(restClock(0, 90), '1:30');
+  assert.equal(restClock(0.4, 90), '1:30');
+  assert.equal(restClock(20, 90), '1:10');
+  assert.equal(restClock(89.2, 90), '0:01');
+  assert.equal(restClock(90, 90), '+0:00');
+  assert.equal(restClock(102.7, 90), '+0:12');
 });
 
 test('formatNumber uses a decimal comma', () => {

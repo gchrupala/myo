@@ -435,7 +435,8 @@ export function stepBodyWeight(state, day, direction, step = 0.1) {
 //
 // Strength phases: 'ready' (no set yet), 'set' (counting reps),
 // 'rest' (timer running since the last set ended).
-// The first rep tap of a set ends the rest; its length is saved with the set.
+// startSet ends the rest; its length is saved with the next set. The first
+// set of an exercise starts with its first rep.
 
 function snapshot(m) {
   return m.fields.map(fieldSnapshot);
@@ -456,27 +457,25 @@ export function startExercise(state, machineId, now) {
 const strengthActive = (state) => (state.active?.kind === 'strength' ? state.active : null);
 const cardioActive = (state) => (state.active?.kind === 'cardio' ? state.active : null);
 
+// Ends the rest (or the wait before the first set) and starts a set with no
+// reps counted yet.
+export function startSet(state, now) {
+  const a = strengthActive(state);
+  if (!a || a.phase === 'set') return;
+  Object.assign(a, { phase: 'set', setStartedAt: now, reps: 0 });
+}
+
 export function addRep(state, now) {
   const a = strengthActive(state);
   if (!a) return;
-  if (a.phase !== 'set') {
-    a.phase = 'set';
-    a.setStartedAt = now;
-    a.reps = 0;
-  }
+  if (a.phase !== 'set') startSet(state, now);
   a.reps += 1;
 }
 
-// Taking away the only rep undoes the start of the set, so a stray tap
-// during rest does not stop the rest timer.
 export function removeRep(state) {
   const a = strengthActive(state);
   if (!a || a.phase !== 'set') return;
   a.reps = Math.max(0, a.reps - 1);
-  if (a.reps === 0) {
-    a.phase = a.restStartedAt ? 'rest' : 'ready';
-    a.setStartedAt = null;
-  }
 }
 
 export function finishSet(state, now) {

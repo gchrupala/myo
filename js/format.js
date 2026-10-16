@@ -14,6 +14,13 @@ export function formatDuration(totalSeconds) {
   return h > 0 ? `${h}:${pad2(m)}:${pad2(sec)}` : `${m}:${pad2(sec)}`;
 }
 
+// The rest clock counts down to the target, then shows the time over it:
+// 90 s target after 20 s -> "1:10", after 100 s -> "+0:10".
+export function restClock(elapsedSec, targetSec) {
+  if (elapsedSec < targetSec) return formatDuration(Math.ceil(targetSec - elapsedSec));
+  return `+${formatDuration(elapsedSec - targetSec)}`;
+}
+
 // 42.5 -> "42,5" in Polish and Spanish, "42.5" in English.
 export function formatNumber(value) {
   return String(value).replace('.', decimalSeparator());

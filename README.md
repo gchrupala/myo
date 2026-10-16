@@ -14,8 +14,8 @@ Dziennik treningu na maszynach na siłowni. Działa w przeglądarce telefonu i d
   | Brzuch, Wiosłowanie | 4; 13; 22 … co 9 (założenie, do sprawdzenia) | 10; 30; 50 … co 20 | 67 kg + 10 lb |
 
   Inny stos albo tarczę ustawisz w edycji maszyny.
-- **Liczenie powtórzeń i serii.** Dotykasz dużego koła przy każdym powtórzeniu. „Zakończ serię” zapisuje serię z datą, liczbą powtórzeń i ustawieniami, z którymi była zrobiona.
-- **Czas odpoczynku.** Po zakończeniu serii koło odmierza odpoczynek. Po upływie wybranego celu (0:45–3:00) koło zmienia kolor, telefon wibruje (Android) i, jeśli włączony, gra krótki sygnał. Pierwsze dotknięcie w kolejnej serii kończy odpoczynek i zapisuje jego długość przy tej serii.
+- **Liczenie powtórzeń i serii.** Dotykasz dużego koła przy każdym powtórzeniu. „Zakończ serię i odpocznij” zapisuje serię z datą, liczbą powtórzeń i ustawieniami, z którymi była zrobiona.
+- **Czas odpoczynku.** Po zakończeniu serii koło odlicza w dół od wybranego celu (0:45–3:00) do zera. Potem pokazuje nadmiar, np. „+0:12”, zmienia kolor, telefon wibruje (Android) i, jeśli włączony, gra krótki sygnał. W trakcie odpoczynku dotknięcie koła nic nie robi; przycisk „Zacznij serię” kończy odpoczynek i zapisuje jego rzeczywistą długość przy następnej serii.
 - **Cardio.** Głównym ustawieniem taśmy jest energia w kcal; to ona jest na pierwszym miejscu w historii. Do tego prędkość, nachylenie i stoper zamiast licznika powtórzeń. Trening można zapisać z samą energią, bez włączania stopera.
 - **Waga ciała.** Na ekranie głównym wpisujesz swoją wagę. Zapisuje się z dzisiejszą datą, jedna wartość na dzień.
 - **Historia.** Dni od najnowszego, z wagą ciała, seriami, ustawieniami i odpoczynkami. Pomyłkę można usunąć.

@@ -7,6 +7,7 @@ import {
   formatDuration,
   formatField,
   formatNumber,
+  restClock,
   setHeadline,
   summarizeSets,
 } from './format.js';
@@ -61,7 +62,10 @@ const current = () => nav[nav.length - 1];
 const today = () => dayKey(Date.now());
 const valueText = (v) => (v === null || v === undefined ? '' : formatNumber(v));
 // A full ring is drawn without dashes, which would leave a seam at the top.
-const dash = (progress) => (progress >= 100 ? 'none' : `${progress.toFixed(2)} 100`);
+const dash = (progress) => (progress >= 99.9 ? 'none' : `${progress.toFixed(2)} 100`);
+// During the rest the ring empties towards the target; once it is reached
+// the ring is full again (and turns yellow).
+const restRing = (elapsed, target) => (elapsed >= target ? 100 : Math.max(0, (1 - elapsed / target) * 100));
 
 // ---------- navigation ----------
 
@@ -203,7 +207,7 @@ function banner() {
   if (a.kind === 'cardio') {
     status = `<span data-live="cardio">${formatDuration(S.cardioElapsedMs(a, now) / 1000)}</span>${a.runningSince ? '' : ` · ${t('banner.paused')}`}`;
   } else if (a.phase === 'rest') {
-    status = `${t('banner.rest')} <span data-live="rest">${formatDuration(S.restElapsedSec(a, now))}</span>`;
+    status = `${t('banner.rest')} <span data-live="rest">${restClock(S.restElapsedSec(a, now), m.restTarget)}</span>`;
   } else if (a.phase === 'set') {
     status = t('banner.set', { reps: a.reps });
   } else {
@@ -412,10 +416,10 @@ function strengthControls(m, a, now, setsToday) {
     const elapsed = S.restElapsedSec(a, now);
     const done = elapsed >= m.restTarget;
     if (done) cls += ' is-done';
-    big = formatDuration(elapsed);
+    big = restClock(elapsed, m.restTarget);
     sub = t('plate.rest');
     hint = t(done ? 'hint.restDone' : 'hint.rest', { target: formatDuration(m.restTarget), n: nextSet });
-    progress = Math.min(100, (elapsed / m.restTarget) * 100);
+    progress = restRing(elapsed, m.restTarget);
   } else {
     big = '0';
     sub = t('plate.reps', { n: 0 });
@@ -426,20 +430,27 @@ function strengthControls(m, a, now, setsToday) {
     (s) =>
       `<button class="seg" type="button" data-action="rest-target" data-sec="${s}" aria-pressed="${m.restTarget === s}">${formatDuration(s)}</button>`,
   ).join('');
-  return `<section class="plate-zone" aria-label="${t('ex.counterAria')}">
-    <button class="${cls}" type="button" data-action="rep">
-      ${ring(progress, phase === 'rest')}
+  // During the rest the circle is only a clock: a tap there must not end it.
+  // The next set starts with its own button.
+  const face = `${ring(progress, phase === 'rest')}
       <span class="plate-face">
-        <span class="sr">${t('ex.addRep')} </span>
+        ${phase === 'rest' ? '' : `<span class="sr">${t('ex.addRep')} </span>`}
         <span class="${bigClass(big)}">${bigHtml}</span>
         <span class="plate-sub">${sub}</span>
-      </span>
-    </button>
+      </span>`;
+  const plate =
+    phase === 'rest'
+      ? `<div class="${cls}" role="timer">${face}</div>`
+      : `<button class="${cls}" type="button" data-action="rep">${face}</button>`;
+  const buttons =
+    phase === 'rest'
+      ? `<button class="btn primary grow" type="button" data-action="start-set">${t('ex.startSet', { n: nextSet })}</button>`
+      : `<button class="btn" type="button" data-action="unrep" aria-label="${t('ex.removeRep')}"${phase === 'set' && a.reps > 0 ? '' : ' disabled'}>−1</button>
+      <button class="btn primary grow" type="button" data-action="finish-set"${phase === 'set' && a.reps > 0 ? '' : ' disabled'}>${t('ex.finishSet')}</button>`;
+  return `<section class="plate-zone" aria-label="${t('ex.counterAria')}">
+    ${plate}
     <p class="hint">${hint}</p>
-    <div class="controls">
-      <button class="btn" type="button" data-action="unrep" aria-label="${t('ex.removeRep')}"${phase === 'set' ? '' : ' disabled'}>−1</button>
-      <button class="btn primary grow" type="button" data-action="finish-set"${phase === 'set' && a.reps > 0 ? '' : ' disabled'}>${t('ex.finishSet')}</button>
-    </div>
+    <div class="controls">${buttons}</div>
   </section>
   <section class="rest-settings" aria-labelledby="rest-label">
     <h2 class="section-title" id="rest-label">${t('ex.restTarget')}</h2>
@@ -779,15 +790,15 @@ function renderLive() {
   if (finish) finish.disabled = !S.cardioCanFinish(state, current().machineId, now);
   const a = state.active;
   if (!a) return;
+  const target = S.getMachine(state, a.machineId)?.restTarget ?? S.DEFAULT_REST;
   for (const el of app.querySelectorAll('[data-live]')) {
     const kind = el.dataset.live;
     if (kind === 'ring') {
-      const target = S.getMachine(state, a.machineId)?.restTarget ?? S.DEFAULT_REST;
-      el.setAttribute('stroke-dasharray', dash(Math.min(100, (S.restElapsedSec(a, now) / target) * 100)));
+      el.setAttribute('stroke-dasharray', dash(restRing(S.restElapsedSec(a, now), target)));
       continue;
     }
     let text = null;
-    if (kind === 'rest' && a.phase === 'rest') text = formatDuration(S.restElapsedSec(a, now));
+    if (kind === 'rest' && a.phase === 'rest') text = restClock(S.restElapsedSec(a, now), target);
     else if (kind === 'set' && a.phase === 'set') text = formatDuration((now - a.setStartedAt) / 1000);
     else if (kind === 'cardio' && a.kind === 'cardio') text = formatDuration(S.cardioElapsedMs(a, now) / 1000);
     if (text !== null && el.textContent !== text) {
@@ -936,6 +947,10 @@ app.addEventListener('click', (e) => {
       break;
     case 'unrep':
       S.removeRep(state);
+      break;
+    case 'start-set':
+      S.startSet(state, now);
+      vibrate(15);
       break;
     case 'finish-set':
       S.finishSet(state, now);

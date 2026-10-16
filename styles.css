@@ -742,8 +742,13 @@ input {
   transition: transform 80ms ease-out, background-color 200ms;
 }
 
-.plate:active {
+button.plate:active {
   transform: scale(0.97);
+}
+
+/* During the rest the circle is a clock, not a button. */
+div.plate {
+  cursor: default;
 }
 
 .plate-ring {

@@ -63,16 +63,30 @@ test('counts reps, saves sets and measures rest between them', () => {
   assert.equal(state.sets.length, 2);
 });
 
-test('removing the only rep resumes the rest timer', () => {
+test('starting the next set ends the rest and records it', () => {
   const { state, row } = fresh();
   S.startExercise(state, row.id, sec(0));
   S.addRep(state, sec(1));
   S.finishSet(state, sec(2));
-  S.addRep(state, sec(30));
+  S.startSet(state, sec(72));
+  assert.equal(state.active.phase, 'set');
+  assert.equal(state.active.reps, 0);
+  // A set with no reps cannot be finished, and -1 does not go below zero.
   S.removeRep(state);
-  assert.equal(state.active.phase, 'rest');
-  assert.equal(state.active.restStartedAt, sec(2));
-  assert.equal(S.finishSet(state, sec(31)), null);
+  assert.equal(state.active.reps, 0);
+  assert.equal(S.finishSet(state, sec(73)), null);
+  S.addRep(state, sec(75));
+  S.addRep(state, sec(77));
+  S.removeRep(state);
+  assert.equal(state.active.phase, 'set');
+  const set = S.finishSet(state, sec(80));
+  assert.equal(set.reps, 1);
+  assert.equal(set.startedAt, sec(72));
+  assert.equal(set.restBeforeSec, 70);
+  // Starting again while a set runs changes nothing.
+  S.startSet(state, sec(90));
+  S.startSet(state, sec(95));
+  assert.equal(state.active.setStartedAt, sec(90));
 });
 
 test('rest alert fires once, and not for a passed target', () => {
