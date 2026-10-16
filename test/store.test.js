@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as S from '../js/store.js';
+import { formatField } from '../js/format.js';
 
 const T0 = new Date(2026, 9, 16, 18, 0, 0).getTime();
 const sec = (n) => T0 + n * 1000;
@@ -35,7 +36,7 @@ test('default machines', () => {
 test('counts reps, saves sets and measures rest between them', () => {
   const { state, row } = fresh();
   const [weight, seat] = row.fields;
-  S.setStackPlate(state, row.id, weight.id, 8); // 36,5 kg
+  S.setStackPlate(state, row.id, weight.id, 8); // 76 kg, dial at 10 lb
   S.setFieldValue(state, row.id, seat.id, '4');
   S.startExercise(state, row.id, sec(0));
   S.addRep(state, sec(1));
@@ -45,7 +46,7 @@ test('counts reps, saves sets and measures rest between them', () => {
   assert.equal(first.reps, 3);
   assert.equal(first.startedAt, sec(1));
   assert.equal(first.restBeforeSec, null);
-  assert.equal(first.settings[0].value, 36.5);
+  assert.equal(first.settings[0].value, 80.5);
   assert.deepEqual(first.settings[1], { label: 'Siedzisko', unit: '', value: 4 });
   assert.equal(state.active.phase, 'rest');
   assert.equal(S.restElapsedSec(state.active, sec(36)), 30);
@@ -281,7 +282,8 @@ test('save, load and import', () => {
 });
 
 test('weight stack: labels, pin, dial and total', () => {
-  const { state, row } = fresh();
+  const { state } = fresh();
+  const row = state.machines.find((m) => m.name === 'Podciąganie');
   const f = row.fields[0];
   assert.equal(f.kind, 'stack');
   // The labels on the photographed Cybex panel.
@@ -289,6 +291,7 @@ test('weight stack: labels, pin, dial and total', () => {
   assert.deepEqual(labels.map((w) => w.lb), [10, 18.5, 27, 35.5, 44, 52.5, 61, 69.5, 78, 86.5, 95, 103.5, 112]);
   assert.deepEqual(labels.map((w) => w.kg), [4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5, 32.5, 36.5, 40.5, 44.5, 48.5, 52.5]);
 
+  f.value = null;
   assert.equal(S.stackTotalKg(f), null);
   assert.deepEqual(S.fieldSnapshot(f), { label: 'Ciężar', kind: 'stack', unit: 'kg', value: null });
 
@@ -357,7 +360,7 @@ test('version 1 data: the default weight setting becomes a stack', () => {
   const v1 = {
     schema: 1,
     machines: [{
-      id: 'm1', name: 'Wiosłowanie', type: 'strength', restTarget: 90,
+      id: 'm1', name: 'Prasa nożna', type: 'strength', restTarget: 90,
       fields: [
         { id: 'f1', label: 'Ciężar', unit: 'kg', step: 5, value: 40 },
         { id: 'f2', label: 'Siedzisko', unit: '', step: 1, value: 3 },
@@ -388,7 +391,7 @@ test('version 2 data: the guessed 0/2/4/6 lb dial becomes 0/5/10/15 lb', () => {
   const v2 = {
     schema: 2,
     machines: [{
-      id: 'm1', name: 'Podciąganie', type: 'strength', restTarget: 90,
+      id: 'm1', name: 'Prasa nożna', type: 'strength', restTarget: 90,
       fields: [stack('f1', { count: 4, step: 2, unit: 'lb' }), stack('f2', { count: 3, step: 1, unit: 'kg' })],
     }],
     sets: [],
@@ -398,4 +401,41 @@ test('version 2 data: the guessed 0/2/4/6 lb dial becomes 0/5/10/15 lb', () => {
   assert.equal(guessed.dialPos, 1);
   assert.equal(S.dialValue(guessed), 5);
   assert.deepEqual(custom.dial, { count: 3, step: 1, unit: 'kg' });
+});
+
+const SESSION = [
+  ['Podciąganie', '16,5 kg'],
+  ['Pompki na poręczach', '8,5 kg'],
+  ['Brzuch', '67 kg + 10 lb'],
+  ['Wyciskanie nad głowę', '31,5 kg + 15 lb'],
+  ['Wiosłowanie', '67 kg + 10 lb'],
+  ['Wyciskanie na klatkę', '49,5 kg + 5 lb'],
+];
+const weightText = (m) => formatField(S.fieldSnapshot(m.fields.find((f) => f.kind === 'stack')));
+
+test('machines start from the settings of the 16 Oct session', () => {
+  const { state } = fresh();
+  for (const [name, text] of SESSION) assert.equal(weightText(state.machines.find((m) => m.name === name)), text, name);
+  const press = state.machines.find((m) => m.name === 'Wyciskanie na klatkę').fields[0];
+  assert.deepEqual(Array.from({ length: 6 }, (_, i) => S.plateWeights(press, i).kg), [4.5, 13.5, 22.5, 31.5, 40.5, 49.5]);
+  assert.deepEqual(Array.from({ length: 6 }, (_, i) => S.plateWeights(press, i).lb), [10, 30, 50, 70, 90, 110]);
+});
+
+test('version 4 data: stacks and settings updated to the 16 Oct session', () => {
+  const v4 = S.createState();
+  for (const m of v4.machines) {
+    for (const f of m.fields) {
+      if (f.kind !== 'stack') continue;
+      f.plates = { ...S.DEFAULT_PLATES };
+      f.value = 1;
+      f.dialPos = 2;
+    }
+  }
+  const pull = v4.machines.find((m) => m.name === 'Pośladki').fields[0];
+  v4.schema = 4;
+  const state = S.parseState(JSON.stringify(v4));
+  for (const [name, text] of SESSION) assert.equal(weightText(state.machines.find((m) => m.name === name)), text, name);
+  // A machine with no reading from the session keeps its setting.
+  const glute = state.machines.find((m) => m.name === 'Pośladki').fields[0];
+  assert.deepEqual([glute.value, glute.dialPos, glute.plates], [pull.value, pull.dialPos, pull.plates]);
 });

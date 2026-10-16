@@ -5,7 +5,15 @@ Dziennik treningu na maszynach na siłowni. Działa w przeglądarce telefonu i d
 ## Co robi
 
 - **Maszyny z ustawieniami.** Każda maszyna ma swoje ustawienia, na przykład ciężar i pozycję siedziska. Aplikacja pamięta ostatnie wartości. Ustawienia można dodawać, zmieniać i usuwać w edycji maszyny.
-- **Stos ciężarków jak na maszynie.** Ciężar wybiera się tak jak na panelu maszyny: lista płytek z opisem w funtach (lb) i kilogramach, bolec w wybranej płytce i tarcza do małych dodatków. Aplikacja zapisuje płytkę, pozycję tarczy i przybliżoną sumę w kg. Liczbę płytek, ich opisy i tarczę ustawia się w edycji maszyny. Domyślnie: 13 płytek, 10–112 lb i 4,5–52,5 kg, tarcza 0, 5, 10, 15 lb (tak jest na podciąganiu i pompkach; na maszynie z inną tarczą zmień to w edycji).
+- **Stos ciężarków jak na maszynie.** Ciężar wybiera się tak jak na panelu maszyny: lista płytek z opisem w funtach (lb) i kilogramach, bolec w wybranej płytce i tarcza do małych dodatków. Aplikacja zapisuje płytkę, pozycję tarczy i przybliżoną sumę w kg. Liczbę płytek, ich opisy i tarczę ustawia się w edycji maszyny. Tarcza ma domyślnie pozycje 0, 5, 10, 15 lb. Stosy płytek różnią się między maszynami:
+
+  | Maszyna | Płytki (kg) | Płytki (lb) | Ostatnie ustawienie (16.10) |
+  | --- | --- | --- | --- |
+  | Podciąganie, Pompki na poręczach | 4,5; 8,5; 12,5 … co 4 | 10; 18,5; 27 … co 8,5 | 16,5 kg; 8,5 kg |
+  | Wyciskanie nad głowę, Wyciskanie na klatkę | 4,5; 13,5; 22,5 … co 9 | 10; 30; 50 … co 20 | 31,5 kg + 15 lb; 49,5 kg + 5 lb |
+  | Brzuch, Wiosłowanie | 4; 13; 22 … co 9 (założenie, do sprawdzenia) | 10; 30; 50 … co 20 | 67 kg + 10 lb |
+
+  Inny stos albo tarczę ustawisz w edycji maszyny.
 - **Liczenie powtórzeń i serii.** Dotykasz dużego koła przy każdym powtórzeniu. „Zakończ serię” zapisuje serię z datą, liczbą powtórzeń i ustawieniami, z którymi była zrobiona.
 - **Czas odpoczynku.** Po zakończeniu serii koło odmierza odpoczynek. Po upływie wybranego celu (0:45–3:00) koło zmienia kolor, telefon wibruje (Android) i, jeśli włączony, gra krótki sygnał. Pierwsze dotknięcie w kolejnej serii kończy odpoczynek i zapisuje jego długość przy tej serii.
 - **Cardio.** Głównym ustawieniem taśmy jest energia w kcal; to ona jest na pierwszym miejscu w historii. Do tego prędkość, nachylenie i stoper zamiast licznika powtórzeń. Trening można zapisać z samą energią, bez włączania stopera.

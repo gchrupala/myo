@@ -23,7 +23,7 @@
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 4;
+export const SCHEMA = 5;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
@@ -62,6 +62,33 @@ function machine(name, type, fields) {
   return { id: newId('m'), name, type, restTarget: DEFAULT_REST, fields };
 }
 
+// Stacks differ between machines. Cybex Eagle NX: a 10 lb top plate, then
+// 20 lb plates, labelled 4.5, 13.5, 22.5 … kg; it fits the overhead and chest
+// press readings. Abdominal and row read 67 kg, which is on neither stack;
+// 9 kg plates from 4 kg is an assumption until their panels are checked.
+const EAGLE_PLATES = { count: 12, kgFirst: 4.5, kgStep: 9, lbFirst: 10, lbStep: 20 };
+const HEAVY_PLATES = { count: 12, kgFirst: 4, kgStep: 9, lbFirst: 10, lbStep: 20 };
+
+// Stacks and settings (plate kg + dial lb) from the session of 16 Oct 2026.
+const MACHINE_SETUP = {
+  'Podciąganie': { kg: 16.5, dial: 0 },
+  'Pompki na poręczach': { kg: 8.5, dial: 0 },
+  'Brzuch': { plates: HEAVY_PLATES, kg: 67, dial: 10 },
+  'Wyciskanie nad głowę': { plates: EAGLE_PLATES, kg: 31.5, dial: 15 },
+  'Wiosłowanie': { plates: HEAVY_PLATES, kg: 67, dial: 10 },
+  'Wyciskanie na klatkę': { plates: EAGLE_PLATES, kg: 49.5, dial: 5 },
+};
+
+function applySetup(m) {
+  const setup = MACHINE_SETUP[m.name];
+  const f = m.fields.find((x) => x.kind === 'stack');
+  if (!setup || !f) return m;
+  if (setup.plates) f.plates = { ...setup.plates };
+  f.value = nearestPlate(f, setup.kg);
+  f.dialPos = f.dial ? clamp(Math.round(setup.dial / f.dial.step), 0, f.dial.count - 1) : 0;
+  return m;
+}
+
 export function defaultMachines() {
   return [
     machine('Podciąganie', 'strength', [weight()]),
@@ -72,7 +99,7 @@ export function defaultMachines() {
     machine('Wyciskanie na klatkę', 'strength', [weight(), seat()]),
     machine('Pośladki', 'strength', [weight()]),
     machine('Taśma', 'cardio', [energy(), field('Prędkość', 'km/h', 0.5), field('Nachylenie', '%', 1)]),
-  ];
+  ].map(applySetup);
 }
 
 export function createState() {
@@ -172,6 +199,8 @@ export function parseState(input) {
       if (m.type === 'cardio' && m.name === 'Taśma' && !m.fields.some((f) => f.unit === 'kcal')) m.fields.unshift(energy());
     }
   }
+  // Version 4 had one stack for all machines and no settings from a session.
+  if (schema < 5) machines.filter((m) => m.type === 'strength').forEach(applySetup);
   const ids = new Set(machines.map((m) => m.id));
   const active = data.active && ids.has(data.active.machineId) ? data.active : null;
   return { schema: SCHEMA, machines, sets, bodyWeights, active, prefs: { sound: data.prefs?.sound !== false } };
