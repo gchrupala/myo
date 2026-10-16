@@ -439,3 +439,11 @@ test('version 4 data: stacks and settings updated to the 16 Oct session', () => 
   const glute = state.machines.find((m) => m.name === 'Pośladki').fields[0];
   assert.deepEqual([glute.value, glute.dialPos, glute.plates], [pull.value, pull.dialPos, pull.plates]);
 });
+
+test('language preference is saved and checked', () => {
+  const state = S.createState();
+  assert.equal(state.prefs.lang, 'system');
+  assert.equal(S.parseState(JSON.stringify({ ...state, prefs: { sound: true, lang: 'es' } })).prefs.lang, 'es');
+  assert.equal(S.parseState(JSON.stringify({ ...state, prefs: { sound: true, lang: 'xx' } })).prefs.lang, 'system');
+  assert.equal(S.parseState(JSON.stringify({ ...state, prefs: { sound: false } })).prefs.lang, 'system');
+});

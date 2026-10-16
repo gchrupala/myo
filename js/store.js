@@ -8,7 +8,7 @@
 //                reps, durationSec, restBeforeSec, settings }],
 //   bodyWeights: [{ day: 'YYYY-MM-DD', kg }], at most one per day,
 //   active:   the exercise in progress, or null,
-//   prefs:    { sound },
+//   prefs:    { sound, lang: 'system' | 'pl' | 'en' | 'es' },
 // }
 // A field is one machine setting, of one of two kinds:
 //   number: { id, kind: 'number', label, unit, step, value }
@@ -103,7 +103,7 @@ export function defaultMachines() {
 }
 
 export function createState() {
-  return { schema: SCHEMA, machines: defaultMachines(), sets: [], bodyWeights: [], active: null, prefs: { sound: true } };
+  return { schema: SCHEMA, machines: defaultMachines(), sets: [], bodyWeights: [], active: null, prefs: { sound: true, lang: 'system' } };
 }
 
 // ---------- persistence ----------
@@ -203,7 +203,8 @@ export function parseState(input) {
   if (schema < 5) machines.filter((m) => m.type === 'strength').forEach(applySetup);
   const ids = new Set(machines.map((m) => m.id));
   const active = data.active && ids.has(data.active.machineId) ? data.active : null;
-  return { schema: SCHEMA, machines, sets, bodyWeights, active, prefs: { sound: data.prefs?.sound !== false } };
+  const lang = ['system', 'pl', 'en', 'es'].includes(data.prefs?.lang) ? data.prefs.lang : 'system';
+  return { schema: SCHEMA, machines, sets, bodyWeights, active, prefs: { sound: data.prefs?.sound !== false, lang } };
 }
 
 export function loadState(storage) {

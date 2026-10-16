@@ -202,6 +202,22 @@ input {
   color: var(--bg);
 }
 
+.settings-btn {
+  margin-left: 0;
+  margin-right: -0.6rem;
+  color: var(--muted);
+}
+
+.icon-btn svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .icon-btn {
   display: inline-grid;
   place-items: center;

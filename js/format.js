@@ -1,4 +1,7 @@
-// Formatting helpers for times, numbers, dates and Polish plurals.
+// Formatting helpers for times, numbers, dates and summaries, in the
+// current interface language (see i18n.js).
+
+import { decimalSeparator, language, locale, nameFor, t } from './i18n.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -11,18 +14,9 @@ export function formatDuration(totalSeconds) {
   return h > 0 ? `${h}:${pad2(m)}:${pad2(sec)}` : `${m}:${pad2(sec)}`;
 }
 
-// Polish plural forms: 1 seria, 2 serie, 5 serii, 22 serie.
-export function plural(n, one, few, many) {
-  if (n === 1) return one;
-  const n10 = n % 10;
-  const n100 = n % 100;
-  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
-  return many;
-}
-
-// Polish decimal comma: 42.5 -> "42,5"
+// 42.5 -> "42,5" in Polish and Spanish, "42.5" in English.
 export function formatNumber(value) {
-  return String(value).replace('.', ',');
+  return String(value).replace('.', decimalSeparator());
 }
 
 // "40 kg" when the setting has a unit, "Siedzisko 4" when it does not.
@@ -33,7 +27,7 @@ export function formatField(field) {
     return field.dial ? `${plate} + ${formatNumber(field.dial)} ${field.dialUnit}` : plate;
   }
   const v = formatNumber(field.value);
-  return field.unit ? `${v} ${field.unit}` : `${field.label} ${v}`;
+  return field.unit ? `${v} ${field.unit}` : `${nameFor(field.label)} ${v}`;
 }
 
 export function formatSettings(settings = []) {
@@ -49,15 +43,23 @@ export function dayKey(ts) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-export function formatDay(key, now = Date.now()) {
-  if (key === dayKey(now)) return 'Dzisiaj';
+// "Dzisiaj", "Wczoraj", "wt. 13.10"; "Today", "Tue 13 Oct"; "Hoy", "mar, 13 oct".
+// midSentence gives "dzisiaj" / "today" for use inside a sentence.
+export function formatDay(key, now = Date.now(), midSentence = false) {
+  if (key === dayKey(now)) return t(midSentence ? 'day.todayMid' : 'day.today');
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (key === dayKey(yesterday.getTime())) return 'Wczoraj';
+  if (key === dayKey(yesterday.getTime())) return t(midSentence ? 'day.yesterdayMid' : 'day.yesterday');
   const [y, m, d] = key.split('-').map(Number);
-  const weekday = new Date(y, m - 1, d).toLocaleDateString('pl-PL', { weekday: 'short' });
-  const year = y === new Date(now).getFullYear() ? '' : `.${y}`;
-  return `${weekday} ${pad2(d)}.${pad2(m)}${year}`;
+  const date = new Date(y, m - 1, d);
+  const sameYear = y === new Date(now).getFullYear();
+  if (language() === 'pl') {
+    const weekday = date.toLocaleDateString(locale(), { weekday: 'short' });
+    return `${weekday} ${pad2(d)}.${pad2(m)}${sameYear ? '' : `.${y}`}`;
+  }
+  const options = { weekday: 'short', day: 'numeric', month: 'short' };
+  if (!sameYear) options.year = 'numeric';
+  return date.toLocaleDateString(locale(), options);
 }
 
 // The leading text of a saved set and the details after it. Strength sets
@@ -65,7 +67,7 @@ export function formatDay(key, now = Date.now()) {
 // otherwise with the time.
 export function setHeadline(set) {
   const settings = set.settings ?? [];
-  if (set.type !== 'cardio') return { main: `${set.reps} powt.`, meta: formatSettings(settings) };
+  if (set.type !== 'cardio') return { main: t('set.reps', { n: set.reps }), meta: formatSettings(settings) };
   const kcal = settings.find((f) => f.unit === 'kcal' && f.value !== null && f.value !== undefined);
   const time = set.durationSec > 0 ? formatDuration(set.durationSec) : '';
   if (!kcal) return { main: time, meta: formatSettings(settings) };
@@ -79,8 +81,7 @@ export function summarizeSets(sets) {
   const cardio = sets.filter((s) => s.type === 'cardio');
   const parts = [];
   if (strength.length) {
-    const n = strength.length;
-    parts.push(`${n} ${plural(n, 'seria', 'serie', 'serii')}: ${strength.map((s) => s.reps).join(', ')} powt.`);
+    parts.push(t('sum.sets', { n: strength.length, reps: strength.map((s) => s.reps).join(', ') }));
   }
   if (cardio.length) {
     parts.push(

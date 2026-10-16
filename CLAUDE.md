@@ -11,13 +11,14 @@
 Aplikacja webowa (PWA) do zapisywania treningu na maszynach: ustawienia maszyn, serie, powtórzenia, czas odpoczynku, waga ciała. Statyczne pliki w katalogu głównym, bez zależności i bez budowania. GitHub Pages serwuje je z `main`.
 
 - `js/store.js`: model danych i zmiany stanu. Czysta logika bez DOM, z czasem przekazywanym jako argument.
-- `js/format.js`: formatowanie czasu, liczb, dat i polskich odmian.
+- `js/format.js`: formatowanie czasu, liczb, dat i podsumowań w bieżącym języku.
+- `js/i18n.js`: teksty interfejsu po polsku, angielsku i hiszpańsku oraz tłumaczenia domyślnych nazw maszyn i ustawień.
 - `js/app.js`: widoki i obsługa zdarzeń.
 - `sw.js`: service worker. Nowe pliki aplikacji dopisz do `APP_FILES`. Przy każdej zmianie plików aplikacji podbij `VERSION`, inaczej telefony zostaną przy starej wersji z pamięci podręcznej.
 - `test/`: testy `node --test` dla `store.js` i `format.js`.
 
 ## Zasady
 
-- Interfejs po polsku. Komentarze w kodzie po angielsku.
+- Interfejs w trzech językach (polski, angielski, hiszpański). Każdy nowy tekst dodaj do `js/i18n.js` we wszystkich trzech. Komentarze w kodzie po angielsku.
 - Dane użytkownika są w `localStorage` pod kluczem `myo:v1`. Zmiany modelu muszą wczytywać stare dane (`parseState`), żeby nie skasować historii treningów.
 - Logikę dodawaj do `store.js` z testami, a nie do `app.js`.

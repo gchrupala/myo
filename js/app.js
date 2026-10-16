@@ -7,10 +7,10 @@ import {
   formatDuration,
   formatField,
   formatNumber,
-  plural,
   setHeadline,
   summarizeSets,
 } from './format.js';
+import { LANGUAGES, language, nameFor, resolveLanguage, setLanguage, t } from './i18n.js';
 
 const REST_PRESETS = [45, 60, 90, 120, 180];
 
@@ -49,14 +49,17 @@ function persist() {
   if (!S.saveState(storage, state)) saveFailed = true;
 }
 
+function applyLanguage() {
+  setLanguage(resolveLanguage(state.prefs.lang, navigator.languages ?? [navigator.language]));
+  document.documentElement.lang = language();
+}
+
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const current = () => nav[nav.length - 1];
 const today = () => dayKey(Date.now());
 const valueText = (v) => (v === null || v === undefined ? '' : formatNumber(v));
-// "Dzisiaj" -> "dzisiaj" inside a sentence.
-const inSentence = (text) => text.charAt(0).toLowerCase() + text.slice(1);
 // A full ring is drawn without dashes, which would leave a seam at the top.
 const dash = (progress) => (progress >= 100 ? 'none' : `${progress.toFixed(2)} 100`);
 
@@ -134,6 +137,7 @@ function render({ preserveFocus = false } = {}) {
     view === 'exercise' ? viewExercise()
     : view === 'history' ? viewHistory()
     : view === 'edit' ? viewEdit()
+    : view === 'settings' ? viewSettings()
     : viewHome();
 
   // Timer-driven redraws must not throw away what the user is typing.
@@ -160,18 +164,22 @@ function render({ preserveFocus = false } = {}) {
   updateWakeLock();
 }
 
+// Gear icon from Feather (feathericons.com, MIT licence).
+const GEAR = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+
 function topBar(tab) {
   const tabButton = (view, label) =>
     `<button class="tab" type="button" data-action="tab" data-view="${view}"${tab === view ? ' aria-current="page"' : ''}>${label}</button>`;
   return `<header class="bar">
     <span class="brand">myo</span>
-    <nav class="tabs" aria-label="Widok">${tabButton('home', 'Maszyny')}${tabButton('history', 'Historia')}</nav>
+    <nav class="tabs" aria-label="${t('nav.view')}">${tabButton('home', t('tab.machines'))}${tabButton('history', t('tab.history'))}</nav>
+    <button class="icon-btn settings-btn" type="button" data-action="settings" aria-label="${t('nav.settings')}">${GEAR}</button>
   </header>`;
 }
 
 function subBar(title, extra = '') {
   return `<header class="bar">
-    <button class="icon-btn" type="button" data-action="back" aria-label="Wróć"><span aria-hidden="true">‹</span></button>
+    <button class="icon-btn" type="button" data-action="back" aria-label="${t('nav.back')}"><span aria-hidden="true">‹</span></button>
     <h1 class="bar-title">${esc(title)}</h1>
     ${extra}
   </header>`;
@@ -179,7 +187,7 @@ function subBar(title, extra = '') {
 
 function storageNotice() {
   return saveFailed
-    ? '<p class="notice">Ta przeglądarka nie zapisuje danych (na przykład w trybie prywatnym). Serie znikną po zamknięciu strony.</p>'
+    ? `<p class="notice">${t('storage.notice')}</p>`
     : '';
 }
 
@@ -193,17 +201,17 @@ function banner() {
   const now = Date.now();
   let status;
   if (a.kind === 'cardio') {
-    status = `<span data-live="cardio">${formatDuration(S.cardioElapsedMs(a, now) / 1000)}</span>${a.runningSince ? '' : ' · pauza'}`;
+    status = `<span data-live="cardio">${formatDuration(S.cardioElapsedMs(a, now) / 1000)}</span>${a.runningSince ? '' : ` · ${t('banner.paused')}`}`;
   } else if (a.phase === 'rest') {
-    status = `odpoczynek <span data-live="rest">${formatDuration(S.restElapsedSec(a, now))}</span>`;
+    status = `${t('banner.rest')} <span data-live="rest">${formatDuration(S.restElapsedSec(a, now))}</span>`;
   } else if (a.phase === 'set') {
-    status = `seria · ${a.reps} powt.`;
+    status = t('banner.set', { reps: a.reps });
   } else {
-    status = 'czeka na serię';
+    status = t('banner.waiting');
   }
   return `<button class="banner" type="button" data-action="open" data-id="${esc(m.id)}">
-    <span class="banner-label">Trwa</span>
-    <span class="banner-name">${esc(m.name)}</span>
+    <span class="banner-label">${t('banner.active')}</span>
+    <span class="banner-name">${esc(nameFor(m.name))}</span>
     <span class="banner-status">${status}</span>
     <span class="chevron" aria-hidden="true">›</span>
   </button>`;
@@ -212,9 +220,9 @@ function banner() {
 function stepper({ id, label, value, placeholder = '—', action, attrs = '', disabled = false }) {
   const dis = disabled ? ' disabled' : '';
   return `<div class="stepper">
-    <button type="button" data-action="${action}" data-dir="-1" ${attrs} aria-label="${esc(label)}: mniej"${dis}>−</button>
+    <button type="button" data-action="${action}" data-dir="-1" ${attrs} aria-label="${esc(t('aria.less', { label }))}"${dis}>−</button>
     <input id="${esc(id)}" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" ${attrs} value="${esc(value)}" placeholder="${esc(placeholder)}">
-    <button type="button" data-action="${action}" data-dir="1" ${attrs} aria-label="${esc(label)}: więcej"${dis}>+</button>
+    <button type="button" data-action="${action}" data-dir="1" ${attrs} aria-label="${esc(t('aria.more', { label }))}"${dis}>+</button>
   </div>`;
 }
 
@@ -229,20 +237,20 @@ function bodyWeightPanel() {
   if (kg !== null && earlier) {
     const diff = Math.round((kg - earlier.kg) * 10) / 10;
     const sign = diff > 0 ? '+' : diff < 0 ? '−' : '±';
-    note = `Zapisano na dzisiaj. Od ${inSentence(formatDay(earlier.day))}: ${sign}${formatNumber(Math.abs(diff))} kg.`;
+    note = t('bw.savedDiff', { since: formatDay(earlier.day, Date.now(), true), diff: `${sign}${formatNumber(Math.abs(diff))}` });
   } else if (kg !== null) {
-    note = 'Zapisano na dzisiaj.';
+    note = t('bw.saved');
   } else if (latest) {
-    note = `Ostatnio ${formatNumber(latest.kg)} kg (${inSentence(formatDay(latest.day))}). Wpisz dzisiejszą albo użyj − i +.`;
+    note = t('bw.last', { kg: formatNumber(latest.kg), day: formatDay(latest.day, Date.now(), true) });
   } else {
-    note = 'Wpisz, a zapisze się z dzisiejszą datą.';
+    note = t('bw.empty');
   }
   return `<section class="body-weight" aria-labelledby="bw-label">
     <div class="field">
-      <label id="bw-label" for="bw-input">Twoja waga <span class="unit">kg</span></label>
+      <label id="bw-label" for="bw-input">${t('bw.label')} <span class="unit">kg</span></label>
       ${stepper({
         id: 'bw-input',
-        label: 'Waga',
+        label: t('bw.aria'),
         value: valueText(kg),
         placeholder: latest ? formatNumber(latest.kg) : '—',
         action: 'bw-step',
@@ -271,11 +279,11 @@ function viewHome() {
     .map((m) => {
       const last = S.lastSession(state, m.id);
       const lastText = last
-        ? `Ostatnio ${inSentence(formatDay(last.day, now))} · ${summarizeSets(last.sets)}`
-        : 'Jeszcze bez zapisanych serii';
+        ? t('home.last', { day: formatDay(last.day, now, true), summary: summarizeSets(last.sets) })
+        : t('home.never');
       return `<li><button class="machine" type="button" data-action="open" data-id="${esc(m.id)}">
         <span class="machine-text">
-          <span class="machine-name">${esc(m.name)}</span>
+          <span class="machine-name">${esc(nameFor(m.name))}</span>
           ${settingChips(m.fields)}
           <span class="machine-last">${esc(lastText)}</span>
         </span>
@@ -288,9 +296,9 @@ function viewHome() {
     ${banner()}
     ${storageNotice()}
     ${bodyWeightPanel()}
-    <h2 class="section-title">Maszyny</h2>
+    <h2 class="section-title">${t('tab.machines')}</h2>
     <ul class="machines">${rows}</ul>
-    <button class="btn wide" type="button" data-action="add-machine">Dodaj maszynę</button>
+    <button class="btn wide" type="button" data-action="add-machine">${t('home.add')}</button>
   </main>`;
 }
 
@@ -298,16 +306,17 @@ function viewHome() {
 
 function settingsSection(m) {
   if (!m.fields.length) {
-    return '<section class="settings"><p class="field-note">Ta maszyna nie ma ustawień. Dodasz je w edycji.</p></section>';
+    return `<section class="settings"><p class="field-note">${t('ex.noSettings')}</p></section>`;
   }
   const rows = m.fields.map((f) => (f.kind === 'stack' ? stackSetting(f) : numberSetting(f))).join('');
-  return `<section class="settings" aria-label="Ustawienia maszyny">${rows}</section>`;
+  return `<section class="settings" aria-label="${t('ex.settingsAria')}">${rows}</section>`;
 }
 
 function numberSetting(f) {
+  const label = nameFor(f.label);
   return `<div class="field">
-    <label for="f-${esc(f.id)}">${esc(f.label)}${f.unit ? ` <span class="unit">${esc(f.unit)}</span>` : ''}</label>
-    ${stepper({ id: `f-${f.id}`, label: f.label, value: valueText(f.value), action: 'step', attrs: `data-field="${esc(f.id)}"` })}
+    <label for="f-${esc(f.id)}">${esc(label)}${f.unit ? ` <span class="unit">${esc(f.unit)}</span>` : ''}</label>
+    ${stepper({ id: `f-${f.id}`, label, value: valueText(f.value), action: 'step', attrs: `data-field="${esc(f.id)}"` })}
   </div>`;
 }
 
@@ -325,7 +334,7 @@ function stackSetting(f) {
   const id = esc(f.id);
   const snap = S.fieldSnapshot(f);
   const total = snap.value === null ? '—' : `${formatNumber(snap.value)} kg`;
-  const hint = snap.value === null ? '<p class="field-note">Dotknij płytki, w którą wkładasz bolec.</p>' : '';
+  const hint = snap.value === null ? `<p class="field-note">${t('stack.hint')}</p>` : '';
   const rows = Array.from({ length: f.plates.count }, (_, i) => {
     const w = S.plateWeights(f, i);
     const pinned = f.value === i;
@@ -338,18 +347,18 @@ function stackSetting(f) {
   }).join('');
   const last = f.dial ? f.dial.count - 1 : 0;
   const dial = f.dial
-    ? `<div class="dial" role="group" aria-label="Tarcza, ${esc(f.dial.unit)}">
+    ? `<div class="dial" role="group" aria-label="${t('dial.name')}, ${esc(f.dial.unit)}">
         <span class="dial-knob">${KNOB_ARROWS}<span class="dial-window">${formatNumber(S.dialValue(f))}</span></span>
         <span class="dial-buttons">
-          <button type="button" data-action="dial" data-field="${id}" data-dir="-1" aria-label="Tarcza: mniej"${f.dialPos <= 0 ? ' disabled' : ''}>−</button>
-          <button type="button" data-action="dial" data-field="${id}" data-dir="1" aria-label="Tarcza: więcej"${f.dialPos >= last ? ' disabled' : ''}>+</button>
+          <button type="button" data-action="dial" data-field="${id}" data-dir="-1" aria-label="${t('dial.less')}"${f.dialPos <= 0 ? ' disabled' : ''}>−</button>
+          <button type="button" data-action="dial" data-field="${id}" data-dir="1" aria-label="${t('dial.more')}"${f.dialPos >= last ? ' disabled' : ''}>+</button>
         </span>
-        <span class="dial-unit">tarcza, ${esc(f.dial.unit)}</span>
+        <span class="dial-unit">${esc(t('dial.caption', { unit: f.dial.unit }))}</span>
       </div>`
     : '';
   return `<div class="stack-field">
     <div class="stack-head">
-      <span class="stack-label" id="lbl-${id}">${esc(f.label)}</span>
+      <span class="stack-label" id="lbl-${id}">${esc(nameFor(f.label))}</span>
       <span class="stack-total">${total}</span>
     </div>
     ${hint}
@@ -396,48 +405,46 @@ function strengthControls(m, a, now, setsToday) {
   let cls = `plate is-${phase}`;
   if (phase === 'set') {
     big = String(a.reps);
-    sub = plural(a.reps, 'powtórzenie', 'powtórzenia', 'powtórzeń');
-    hint = `Seria ${nextSet} · <span data-live="set">${formatDuration((now - a.setStartedAt) / 1000)}</span>`;
+    sub = t('plate.reps', { n: a.reps });
+    hint = `${t('hint.set', { n: nextSet })} · <span data-live="set">${formatDuration((now - a.setStartedAt) / 1000)}</span>`;
     progress = 100;
   } else if (phase === 'rest') {
     const elapsed = S.restElapsedSec(a, now);
     const done = elapsed >= m.restTarget;
     if (done) cls += ' is-done';
     big = formatDuration(elapsed);
-    sub = 'odpoczynek';
-    hint = done
-      ? `Minął cel ${formatDuration(m.restTarget)}. Czas na serię ${nextSet}.`
-      : `Cel ${formatDuration(m.restTarget)}. Dotknij, gdy zaczniesz serię ${nextSet}.`;
+    sub = t('plate.rest');
+    hint = t(done ? 'hint.restDone' : 'hint.rest', { target: formatDuration(m.restTarget), n: nextSet });
     progress = Math.min(100, (elapsed / m.restTarget) * 100);
   } else {
     big = '0';
-    sub = 'powtórzeń';
-    hint = 'Dotykaj koła przy każdym powtórzeniu.';
+    sub = t('plate.reps', { n: 0 });
+    hint = t('hint.ready');
   }
   const bigHtml = phase === 'rest' ? `<span data-live="rest">${big}</span>` : big;
   const presets = REST_PRESETS.map(
     (s) =>
       `<button class="seg" type="button" data-action="rest-target" data-sec="${s}" aria-pressed="${m.restTarget === s}">${formatDuration(s)}</button>`,
   ).join('');
-  return `<section class="plate-zone" aria-label="Licznik powtórzeń">
+  return `<section class="plate-zone" aria-label="${t('ex.counterAria')}">
     <button class="${cls}" type="button" data-action="rep">
       ${ring(progress, phase === 'rest')}
       <span class="plate-face">
-        <span class="sr">Dodaj powtórzenie. </span>
+        <span class="sr">${t('ex.addRep')} </span>
         <span class="${bigClass(big)}">${bigHtml}</span>
         <span class="plate-sub">${sub}</span>
       </span>
     </button>
     <p class="hint">${hint}</p>
     <div class="controls">
-      <button class="btn" type="button" data-action="unrep" aria-label="Odejmij powtórzenie"${phase === 'set' ? '' : ' disabled'}>−1</button>
-      <button class="btn primary grow" type="button" data-action="finish-set"${phase === 'set' && a.reps > 0 ? '' : ' disabled'}>Zakończ serię</button>
+      <button class="btn" type="button" data-action="unrep" aria-label="${t('ex.removeRep')}"${phase === 'set' ? '' : ' disabled'}>−1</button>
+      <button class="btn primary grow" type="button" data-action="finish-set"${phase === 'set' && a.reps > 0 ? '' : ' disabled'}>${t('ex.finishSet')}</button>
     </div>
   </section>
   <section class="rest-settings" aria-labelledby="rest-label">
-    <h2 class="section-title" id="rest-label">Cel odpoczynku</h2>
+    <h2 class="section-title" id="rest-label">${t('ex.restTarget')}</h2>
     <div class="segs">${presets}</div>
-    <label class="check"><input id="sound" type="checkbox"${state.prefs.sound ? ' checked' : ''}> Dźwięk po upływie celu</label>
+    <label class="check"><input id="sound" type="checkbox"${state.prefs.sound ? ' checked' : ''}> ${t('ex.sound')}</label>
   </section>`;
 }
 
@@ -446,21 +453,21 @@ function cardioControls(m, a, now) {
   const running = Boolean(a?.runningSince);
   const started = ms > 0 || running;
   const cls = `plate ${running ? 'is-set' : started ? 'is-paused' : 'is-ready'}`;
-  const sub = running ? 'trwa' : started ? 'pauza' : 'stoper';
-  const hint = running ? 'Dotknij, aby zatrzymać.' : started ? 'Dotknij, aby wznowić.' : 'Dotknij, aby włączyć stoper.';
+  const sub = t(running ? 'cardio.running' : started ? 'cardio.paused' : 'cardio.stopwatch');
+  const hint = t(running ? 'cardio.hintRunning' : started ? 'cardio.hintPaused' : 'cardio.hintReady');
   const big = formatDuration(ms / 1000);
-  return `<section class="plate-zone" aria-label="Stoper">
+  return `<section class="plate-zone" aria-label="${t('cardio.aria')}">
     <button class="${cls}" type="button" data-action="cardio-toggle">
       ${ring(started ? 100 : 0, false)}
       <span class="plate-face">
-        <span class="sr">${running ? 'Zatrzymaj stoper' : 'Włącz stoper'}. </span>
+        <span class="sr">${t(running ? 'cardio.stop' : 'cardio.start')}. </span>
         <span class="${bigClass(big)}"><span data-live="cardio">${big}</span></span>
         <span class="plate-sub">${sub}</span>
       </span>
     </button>
     <p class="hint">${hint}</p>
     <div class="controls">
-      <button class="btn primary grow" type="button" data-action="cardio-finish"${S.cardioCanFinish(state, m.id, now) ? '' : ' disabled'}>Zapisz i zakończ</button>
+      <button class="btn primary grow" type="button" data-action="cardio-finish"${S.cardioCanFinish(state, m.id, now) ? '' : ' disabled'}>${t('cardio.finish')}</button>
     </div>
   </section>`;
 }
@@ -471,12 +478,12 @@ function setRows(sets, deletable) {
     .map((s, i) => {
       const rest =
         i > 0 && s.restBeforeSec !== null && s.restBeforeSec !== undefined
-          ? `<li class="rest-row"><span>odpoczynek ${formatDuration(s.restBeforeSec)}</span></li>`
+          ? `<li class="rest-row"><span>${t('set.rest', { time: formatDuration(s.restBeforeSec) })}</span></li>`
           : '';
       const { main, meta } = setHeadline(s);
       const confirming = ui.confirm === `set:${s.id}`;
       const del = deletable
-        ? `<button class="set-del${confirming ? ' is-confirm' : ''}" type="button" data-action="del-set" data-id="${esc(s.id)}">${confirming ? 'Usunąć?' : 'Usuń'}</button>`
+        ? `<button class="set-del${confirming ? ' is-confirm' : ''}" type="button" data-action="del-set" data-id="${esc(s.id)}">${t(confirming ? 'set.confirm' : 'set.delete')}</button>`
         : '';
       return `${rest}<li class="set-row">
         <span class="set-n">${i + 1}</span>
@@ -505,15 +512,15 @@ function viewExercise() {
   const prev = S.lastSession(state, m.id, day);
   const controls = m.type === 'cardio' ? cardioControls(m, a, now) : strengthControls(m, a, now, setsToday);
   const end =
-    a && m.type !== 'cardio' ? '<button class="btn wide" type="button" data-action="end">Zakończ ćwiczenie</button>' : '';
-  return `${subBar(m.name, `<button class="btn small" type="button" data-action="edit" data-id="${esc(m.id)}">Edytuj</button>`)}
+    a && m.type !== 'cardio' ? `<button class="btn wide" type="button" data-action="end">${t('ex.end')}</button>` : '';
+  return `${subBar(nameFor(m.name), `<button class="btn small" type="button" data-action="edit" data-id="${esc(m.id)}">${t('ex.edit')}</button>`)}
   <main class="exercise">
     ${banner()}
     ${storageNotice()}
     ${settingsSection(m)}
     ${controls}
-    ${setLog(setsToday.length ? `Dzisiaj · ${summarizeSets(setsToday)}` : 'Dzisiaj', setsToday, true)}
-    ${prev ? setLog(`Poprzednio · ${formatDay(prev.day, now)}`, prev.sets, false) : ''}
+    ${setLog(setsToday.length ? `${t('day.today')} · ${summarizeSets(setsToday)}` : t('day.today'), setsToday, true)}
+    ${prev ? setLog(t('ex.previous', { day: formatDay(prev.day, now) }), prev.sets, false) : ''}
     ${end}
   </main>`;
 }
@@ -527,10 +534,10 @@ function dayTotals(blocks, bodyWeight) {
   const cardioSec = cardio.reduce((n, s) => n + (s.durationSec || 0), 0);
   const kcal = cardio.reduce((n, s) => n + (s.settings?.find((f) => f.unit === 'kcal')?.value || 0), 0);
   const parts = [];
-  if (bodyWeight !== null) parts.push(`waga ${formatNumber(bodyWeight)} kg`);
+  if (bodyWeight !== null) parts.push(t('hist.weight', { kg: formatNumber(bodyWeight) }));
   if (strength.length) {
     const reps = strength.reduce((n, s) => n + s.reps, 0);
-    parts.push(`${strength.length} ${plural(strength.length, 'seria', 'serie', 'serii')}, ${reps} powt.`);
+    parts.push(t('hist.sets', { n: strength.length, reps }));
   }
   if (cardio.length) {
     const cardioParts = [kcal ? `${formatNumber(kcal)} kcal` : '', cardioSec ? formatDuration(cardioSec) : ''];
@@ -542,23 +549,22 @@ function dayTotals(blocks, bodyWeight) {
 function dataSection() {
   let confirm = '';
   if (ui.importCandidate) {
-    const n = ui.importCandidate.machines.length;
-    const k = ui.importCandidate.sets.length;
+    const counts = { machines: ui.importCandidate.machines.length, sets: ui.importCandidate.sets.length };
     confirm = `<div class="notice" role="alert">
-      <p>Plik zawiera ${n} ${plural(n, 'maszynę', 'maszyny', 'maszyn')} i ${k} ${plural(k, 'serię', 'serie', 'serii')}. Obecne dane zostaną zastąpione.</p>
+      <p>${t('data.confirm', counts)}</p>
       <div class="controls">
-        <button class="btn danger" type="button" data-action="import-confirm">Zastąp dane</button>
-        <button class="btn" type="button" data-action="import-cancel">Anuluj</button>
+        <button class="btn danger" type="button" data-action="import-confirm">${t('data.replace')}</button>
+        <button class="btn" type="button" data-action="import-cancel">${t('data.cancel')}</button>
       </div>
     </div>`;
   }
   const error = ui.importError ? `<p class="error" role="alert">${esc(ui.importError)}</p>` : '';
   return `<section class="data" aria-labelledby="data-label">
-    <h2 class="section-title" id="data-label">Kopia danych</h2>
-    <p class="field-note">Dane są zapisane tylko w tej przeglądarce, na tym telefonie. Pobierz kopię przed zmianą telefonu albo wyczyszczeniem danych przeglądarki.</p>
+    <h2 class="section-title" id="data-label">${t('data.title')}</h2>
+    <p class="field-note">${t('data.note')}</p>
     <div class="controls">
-      <button class="btn" type="button" data-action="export">Pobierz kopię</button>
-      <label class="btn" for="import-file">Wczytaj kopię</label>
+      <button class="btn" type="button" data-action="export">${t('data.export')}</button>
+      <label class="btn" for="import-file">${t('data.import')}</label>
     </div>
     <input id="import-file" type="file" accept="application/json,.json" hidden>
     ${error}${confirm}
@@ -577,7 +583,7 @@ function viewHistory() {
         ${blocks
           .map(
             (b) => `<article class="block">
-          <h3 class="block-title">${esc(S.getMachine(state, b.machineId)?.name ?? b.machineName)}</h3>
+          <h3 class="block-title">${esc(nameFor(S.getMachine(state, b.machineId)?.name ?? b.machineName))}</h3>
           <ol class="sets">${setRows(b.sets, true)}</ol>
         </article>`,
           )
@@ -586,8 +592,8 @@ function viewHistory() {
         )
         .join('')
     : `<div class="empty">
-        <p class="empty-title">Historia jest pusta</p>
-        <p>Wybierz maszynę w zakładce Maszyny i dotykaj dużego koła przy każdym powtórzeniu. Po „Zakończ serię” seria trafi tutaj z datą, ustawieniami i czasem odpoczynku.</p>
+        <p class="empty-title">${t('hist.emptyTitle')}</p>
+        <p>${t('hist.emptyText')}</p>
       </div>`;
   return `${topBar('history')}
   <main>
@@ -625,10 +631,13 @@ function draftField(f = {}) {
   };
 }
 
+// Default names appear translated in the form. origName and origLabel keep
+// what is stored, so an untouched name is saved unchanged (see saveDraft).
 function draftFor(machineId) {
   const m = machineId && S.getMachine(state, machineId);
-  if (m) return { id: m.id, name: m.name, type: m.type, fields: m.fields.map(draftField) };
-  return { id: null, name: '', type: 'strength', fields: [draftField({ kind: 'stack', label: 'Ciężar' })] };
+  const fieldDraft = (f) => ({ ...draftField(f), label: nameFor(f.label), origLabel: f.label });
+  if (m) return { id: m.id, name: nameFor(m.name), origName: m.name, type: m.type, fields: m.fields.map(fieldDraft) };
+  return { id: null, name: '', type: 'strength', fields: [fieldDraft({ kind: 'stack', label: 'Ciężar' })] };
 }
 
 function draftFieldRow(f, i) {
@@ -640,39 +649,39 @@ function draftFieldRow(f, i) {
   const body =
     f.kind === 'stack'
       ? `<div class="draft-grid">
-          <label for="d-plates-count-${i}">Płytek</label>
+          <label for="d-plates-count-${i}">${t('edit.plates')}</label>
           ${input('plates.count', f.plates.count, 'inputmode="numeric"')}
           <span></span>
-          <span>Pierwsza płytka</span>
-          ${suffix(num('plates.kgFirst', f.plates.kgFirst, 'Pierwsza płytka w kg'), 'kg')}
-          ${suffix(num('plates.lbFirst', f.plates.lbFirst, 'Pierwsza płytka w funtach'), 'lb')}
-          <span>Każda następna</span>
-          ${suffix(num('plates.kgStep', f.plates.kgStep, 'Każda następna płytka w kg'), '+kg')}
-          ${suffix(num('plates.lbStep', f.plates.lbStep, 'Każda następna płytka w funtach'), '+lb')}
-          <label for="d-dial-count-${i}">Tarcza: pozycji</label>
+          <span>${t('edit.firstPlate')}</span>
+          ${suffix(num('plates.kgFirst', f.plates.kgFirst, t('edit.firstKg')), 'kg')}
+          ${suffix(num('plates.lbFirst', f.plates.lbFirst, t('edit.firstLb')), 'lb')}
+          <span>${t('edit.nextPlate')}</span>
+          ${suffix(num('plates.kgStep', f.plates.kgStep, t('edit.nextKg')), '+kg')}
+          ${suffix(num('plates.lbStep', f.plates.lbStep, t('edit.nextLb')), '+lb')}
+          <label for="d-dial-count-${i}">${t('edit.dialCount')}</label>
           ${input('dial.count', f.dial.count, 'inputmode="numeric"')}
-          <span class="draft-hint">0 = bez tarczy</span>
-          <label for="d-dial-step-${i}">Tarcza: co</label>
+          <span class="draft-hint">${t('edit.noDial')}</span>
+          <label for="d-dial-step-${i}">${t('edit.dialStep')}</label>
           ${input('dial.step', f.dial.step, 'inputmode="decimal"')}
-          <select id="d-dial-unit-${i}" data-draft="dial.unit" data-i="${i}" aria-label="Jednostka tarczy">
+          <select id="d-dial-unit-${i}" data-draft="dial.unit" data-i="${i}" aria-label="${t('edit.dialUnit')}">
             ${option('lb', 'lb', f.dial.unit)}${option('kg', 'kg', f.dial.unit)}
           </select>
         </div>`
       : `<div class="draft-grid">
-          <label for="d-unit-${i}">Jednostka</label>
+          <label for="d-unit-${i}">${t('edit.unit')}</label>
           ${input('unit', f.unit, 'placeholder="—"')}
           <span></span>
-          <label for="d-step-${i}">Krok − i +</label>
+          <label for="d-step-${i}">${t('edit.step')}</label>
           ${input('step', f.step, 'inputmode="decimal"')}
           <span></span>
         </div>`;
   return `<div class="draft-field">
     <div class="draft-main">
-      ${input('label', f.label, 'placeholder="np. Oparcie" aria-label="Nazwa ustawienia"')}
-      <select id="d-kind-${i}" data-draft="kind" data-i="${i}" aria-label="Rodzaj ustawienia">
-        ${option('number', 'Liczba', f.kind)}${option('stack', 'Stos ciężarków', f.kind)}
+      ${input('label', f.label, `placeholder="${t('edit.fieldPlaceholder')}" aria-label="${t('edit.fieldName')}"`)}
+      <select id="d-kind-${i}" data-draft="kind" data-i="${i}" aria-label="${t('edit.kind')}">
+        ${option('number', t('edit.kindNumber'), f.kind)}${option('stack', t('edit.kindStack'), f.kind)}
       </select>
-      <button class="icon-btn" type="button" data-action="draft-remove" data-i="${i}" aria-label="Usuń ustawienie ${esc(f.label)}"><span aria-hidden="true">×</span></button>
+      <button class="icon-btn" type="button" data-action="draft-remove" data-i="${i}" aria-label="${esc(t('edit.removeField', { label: f.label }))}"><span aria-hidden="true">×</span></button>
     </div>
     ${body}
   </div>`;
@@ -684,41 +693,50 @@ function viewEdit() {
   const confirming = ui.confirm === `machine:${d.id}`;
   const del = d.id
     ? `<section class="danger-zone">
-        <button class="btn danger wide" type="button" data-action="del-machine">${confirming ? 'Na pewno usunąć?' : 'Usuń maszynę'}</button>
-        <p class="field-note">Zapisane serie zostaną w historii.</p>
+        <button class="btn danger wide" type="button" data-action="del-machine">${t(confirming ? 'edit.deleteConfirm' : 'edit.delete')}</button>
+        <p class="field-note">${t('edit.deleteNote')}</p>
       </section>`
     : '';
   const typeOption = (value, label) =>
     `<label class="radio"><input type="radio" name="type" value="${value}"${d.type === value ? ' checked' : ''}> ${label}</label>`;
-  return `${subBar(d.id ? 'Edytuj maszynę' : 'Nowa maszyna')}
+  return `${subBar(t(d.id ? 'edit.titleEdit' : 'edit.titleNew'))}
   <main>
     <form id="edit-form" class="edit" novalidate>
       <div class="form-row">
-        <label for="d-name">Nazwa</label>
-        <input id="d-name" type="text" data-draft="name" value="${esc(d.name)}" placeholder="np. Prasa nożna" autocomplete="off">
+        <label for="d-name">${t('edit.name')}</label>
+        <input id="d-name" type="text" data-draft="name" value="${esc(d.name)}" placeholder="${t('edit.namePlaceholder')}" autocomplete="off">
       </div>
       <fieldset class="form-row">
-        <legend>Rodzaj</legend>
-        ${typeOption('strength', 'Siłowa: serie i powtórzenia')}
-        ${typeOption('cardio', 'Cardio: stoper')}
+        <legend>${t('edit.type')}</legend>
+        ${typeOption('strength', t('edit.typeStrength'))}
+        ${typeOption('cardio', t('edit.typeCardio'))}
       </fieldset>
       <fieldset class="form-row">
-        <legend>Ustawienia</legend>
-        <p class="field-note">Na przykład ciężar, wysokość siedziska, pozycja oparcia. „Stos ciężarków” to płytki z bolcem i tarczą do małych dodatków, opisane tak jak na maszynie.</p>
+        <legend>${t('edit.settings')}</legend>
+        <p class="field-note">${t('edit.settingsNote')}</p>
         ${rows}
-        <button class="btn" type="button" data-action="draft-add">Dodaj ustawienie</button>
+        <button class="btn" type="button" data-action="draft-add">${t('edit.addField')}</button>
       </fieldset>
       ${ui.draftError ? `<p class="error" role="alert">${esc(ui.draftError)}</p>` : ''}
-      <button class="btn primary wide" type="submit">Zapisz</button>
+      <button class="btn primary wide" type="submit">${t('edit.save')}</button>
     </form>
     ${del}
   </main>`;
 }
 
 function saveDraft() {
-  const m = S.saveMachine(state, ui.draft, Date.now());
+  const d = ui.draft;
+  // A default name left as shown is saved as stored, so it keeps following
+  // the interface language.
+  const keep = (shown, stored) => (stored !== undefined && shown.trim() === nameFor(stored) ? stored : shown);
+  const draft = {
+    ...d,
+    name: keep(d.name, d.origName),
+    fields: d.fields.map((f) => ({ ...f, label: keep(f.label, f.origLabel) })),
+  };
+  const m = S.saveMachine(state, draft, Date.now());
   if (!m) {
-    ui.draftError = 'Podaj nazwę maszyny.';
+    ui.draftError = t('edit.nameError');
     render();
     document.getElementById('d-name')?.focus();
     return;
@@ -726,6 +744,24 @@ function saveDraft() {
   ui.draftError = '';
   persist();
   back();
+}
+
+// ---------- settings ----------
+
+function viewSettings() {
+  const pref = state.prefs.lang;
+  const system = LANGUAGES[resolveLanguage('system', navigator.languages ?? [navigator.language])];
+  const option = (value, label, lang = '') =>
+    `<label class="radio"${lang ? ` lang="${lang}"` : ''}><input type="radio" name="lang" value="${value}"${pref === value ? ' checked' : ''}> ${esc(label)}</label>`;
+  return `${subBar(t('settings.title'))}
+  <main>
+    <fieldset class="form-row">
+      <legend>${t('settings.language')}</legend>
+      ${option('system', t('settings.system', { name: system }))}
+      ${Object.entries(LANGUAGES).map(([code, name]) => option(code, name, code)).join('')}
+    </fieldset>
+    <p class="field-note">${t('settings.languageNote')}</p>
+  </main>`;
 }
 
 // ---------- live timers, signal, screen ----------
@@ -845,11 +881,11 @@ function readImport(file) {
   reader.onload = () => {
     const parsed = S.parseState(String(reader.result));
     ui.importCandidate = parsed;
-    ui.importError = parsed ? '' : 'Nie udało się wczytać pliku. To nie jest kopia danych Myo.';
+    ui.importError = parsed ? '' : t('data.errorParse');
     render();
   };
   reader.onerror = () => {
-    ui.importError = 'Nie udało się odczytać pliku.';
+    ui.importError = t('data.errorRead');
     render();
   };
   reader.readAsText(file);
@@ -886,6 +922,9 @@ app.addEventListener('click', (e) => {
       return;
     case 'add-machine':
       go('edit', null);
+      return;
+    case 'settings':
+      go('settings');
       return;
     case 'edit':
       go('edit', el.dataset.id);
@@ -946,6 +985,7 @@ app.addEventListener('click', (e) => {
     case 'import-confirm':
       state = ui.importCandidate;
       ui.importCandidate = null;
+      applyLanguage();
       break;
     case 'import-cancel':
       ui.importCandidate = null;
@@ -992,6 +1032,12 @@ app.addEventListener('change', (e) => {
   } else if (t.id === 'sound') {
     state.prefs.sound = t.checked;
     persist();
+  } else if (t.name === 'lang') {
+    state.prefs.lang = t.value;
+    persist();
+    applyLanguage();
+    render();
+    app.querySelector(`input[name="lang"][value="${t.value}"]`)?.focus();
   } else if (t.name === 'type' && ui.draft) {
     ui.draft.type = t.value;
   } else if (t.dataset.draft === 'kind' && ui.draft) {
@@ -1045,6 +1091,7 @@ try {
 } catch {
   historyOK = false;
 }
+applyLanguage();
 if (state.active && S.getMachine(state, state.active.machineId)) go('exercise', state.active.machineId);
 else render();
 setInterval(renderLive, 250);

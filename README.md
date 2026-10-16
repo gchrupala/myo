@@ -20,6 +20,7 @@ Dziennik treningu na maszynach na siłowni. Działa w przeglądarce telefonu i d
 - **Waga ciała.** Na ekranie głównym wpisujesz swoją wagę. Zapisuje się z dzisiejszą datą, jedna wartość na dzień.
 - **Historia.** Dni od najnowszego, z wagą ciała, seriami, ustawieniami i odpoczynkami. Pomyłkę można usunąć.
 - **Poprzedni trening.** Na ekranie maszyny widać, co było zrobione ostatnim razem.
+- **Język.** Ikona koła zębatego otwiera ustawienia. Do wyboru: język systemu, polski, angielski, hiszpański. Domyślne nazwy maszyn i ustawień też zmieniają język, nazwy wpisane ręcznie zostają bez zmian.
 
 Domyślne maszyny: Podciąganie, Pompki na poręczach, Brzuch, Wyciskanie nad głowę, Wiosłowanie, Wyciskanie na klatkę, Pośladki, Taśma.
 
@@ -60,10 +61,11 @@ Bez zależności i bez kroku budowania.
 | `index.html` | strona, manifest, ikony |
 | `styles.css` | wygląd, jasny i ciemny motyw |
 | `js/store.js` | model danych: maszyny, serie, odpoczynek, waga ciała, zapis i odczyt |
-| `js/format.js` | formatowanie czasu, liczb, dat i polskich odmian |
+| `js/format.js` | formatowanie czasu, liczb, dat i podsumowań w bieżącym języku |
+| `js/i18n.js` | teksty interfejsu (pl, en, es) i tłumaczenia domyślnych nazw |
 | `js/app.js` | widoki i obsługa dotknięć |
 | `sw.js` | praca bez internetu (service worker) |
-| `test/` | testy `node --test` dla `store.js` i `format.js` |
+| `test/` | testy `node --test` dla `store.js`, `format.js` i `i18n.js` |
 
 ## Ograniczenia
 

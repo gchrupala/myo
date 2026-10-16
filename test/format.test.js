@@ -6,7 +6,6 @@ import {
   formatDuration,
   formatNumber,
   formatSettings,
-  plural,
   setHeadline,
   summarizeSets,
 } from '../js/format.js';
@@ -18,13 +17,6 @@ test('formatDuration', () => {
   assert.equal(formatDuration(600), '10:00');
   assert.equal(formatDuration(3723), '1:02:03');
   assert.equal(formatDuration(-3), '0:00');
-});
-
-test('plural follows Polish rules', () => {
-  const p = (n) => plural(n, 'seria', 'serie', 'serii');
-  assert.deepEqual([0, 1, 2, 4, 5, 11, 12, 14, 21, 22, 25, 112].map(p), [
-    'serii', 'seria', 'serie', 'serie', 'serii', 'serii', 'serii', 'serii', 'serii', 'serie', 'serii', 'serii',
-  ]);
 });
 
 test('formatNumber uses a decimal comma', () => {
