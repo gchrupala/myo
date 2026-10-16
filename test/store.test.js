@@ -537,3 +537,35 @@ test('version 7 data: the abdominal and row guess gets matching lb labels', () =
   assert.deepEqual(plates('Podciąganie'), { ...S.DEFAULT_PLATES, zero: true });
   assert.equal(plates('Wyciskanie na klatkę').lbFirst, 10);
 });
+
+test('a plate labelled 0 kg becomes the zero position', () => {
+  const { state } = fresh();
+  const glutes = state.machines.find((m) => m.name === 'Pośladki');
+  const f = glutes.fields[0];
+  S.saveMachine(state, {
+    id: glutes.id, name: glutes.name, type: 'strength',
+    fields: [{ id: f.id, kind: 'stack', label: 'Ciężar', plates: { count: '10', kgFirst: '0', kgStep: '5', lbFirst: '0', lbStep: '11' }, dial: { count: '0' } }],
+  }, sec(0));
+  const g = glutes.fields[0];
+  assert.deepEqual(g.plates, { count: 9, kgFirst: 5, kgStep: 5, lbFirst: 11, lbStep: 11, zero: true });
+  assert.deepEqual([S.plateWeights(g, -1).kg, S.plateWeights(g, 0).kg, S.plateWeights(g, 1).kg], [0, 5, 10]);
+});
+
+test('version 8 data: the edited chin-up stack with two zeros is put back', () => {
+  const v8 = S.createState();
+  const broken = { count: 14, kgFirst: 0, kgStep: 4, lbFirst: 0, lbStep: 8.5, zero: true };
+  const chin = v8.machines.find((m) => m.name === 'Podciąganie').fields[0];
+  const dips = v8.machines.find((m) => m.name === 'Pompki na poręczach').fields[0];
+  Object.assign(chin, { plates: { ...broken }, value: -1 }); // pin in the zero row, as in the screenshot
+  Object.assign(dips, { plates: { ...broken }, value: 4 }); // the 0, 4, 8, 12, 16 kg plate
+  v8.schema = 8;
+  const state = S.parseState(JSON.stringify(v8));
+  const after = (name) => state.machines.find((m) => m.name === name).fields[0];
+  for (const name of ['Podciąganie', 'Pompki na poręczach']) {
+    assert.deepEqual(after(name).plates, { ...S.DEFAULT_PLATES, zero: true }, name);
+  }
+  assert.equal(S.stackTotalKg(after('Podciąganie')), 0);
+  assert.equal(S.stackTotalKg(after('Pompki na poręczach')), 16.5);
+  // Untouched stacks are not changed.
+  assert.equal(S.stackTotalKg(after('Wiosłowanie')), 71.5);
+});

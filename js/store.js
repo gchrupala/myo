@@ -25,7 +25,7 @@
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 8;
+export const SCHEMA = 9;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
@@ -150,7 +150,7 @@ function parseField(f, schema) {
     const dial = parseDial(f.dial);
     // Version 2 guessed 0/2/4/6 lb for the dial; the machines show 0/5/10/15.
     if (schema < 3 && dial?.count === 4 && dial.step === 2 && dial.unit === 'lb') dial.step = DEFAULT_DIAL.step;
-    return {
+    const s = {
       id,
       kind: 'stack',
       label: f.label,
@@ -159,6 +159,9 @@ function parseField(f, schema) {
       plates,
       dial,
     };
+    // Before version 9 a stack could have a plate labelled 0 kg next to the
+    // zero position, which showed two zeros.
+    return schema < 9 ? dropZeroPlate(s) : s;
   }
   return {
     id,
@@ -209,6 +212,14 @@ export function parseState(input) {
   }
   // Version 4 had one stack for all machines and no settings from a session.
   if (schema < 5) machines.filter((m) => m.type === 'strength').forEach(applySetup);
+  // Version 8 let an edit move the chin-up and dip stacks away from the
+  // photographed panel. They are put back, keeping the pin at the same weight.
+  if (schema < 9) {
+    for (const m of machines) {
+      if (!MACHINE_SETUP[m.name]?.zero) continue;
+      for (const f of m.fields) if (f.kind === 'stack') restorePhotoStack(f);
+    }
+  }
   // Version 6 had no 0 kg position; the chin-up and dip machines are assisted.
   if (schema < 7) {
     for (const m of machines) {
@@ -316,6 +327,32 @@ export function reconcilePlates(plates) {
   return p;
 }
 
+// A plate labelled 0 kg is the zero position (the pin out). The stack gets
+// the zero position instead, and the plates after it move up by one.
+export function dropZeroPlate(field) {
+  const p = field.plates;
+  if (p.kgFirst !== 0) return field;
+  const plates = { ...p, zero: true, kgFirst: p.kgStep, lbFirst: p.lbStep, count: Math.max(1, p.count - 1) };
+  const value = field.value === null ? null : clamp(field.value - 1, -1, plates.count - 1);
+  return { ...field, plates, value };
+}
+
+const matchesPhoto = (p) =>
+  p.kgFirst === DEFAULT_PLATES.kgFirst &&
+  p.kgStep === DEFAULT_PLATES.kgStep &&
+  p.lbFirst === DEFAULT_PLATES.lbFirst &&
+  p.lbStep === DEFAULT_PLATES.lbStep;
+
+// The chin-up and dip machines have the photographed stack plus 0 kg.
+function restorePhotoStack(f) {
+  if (!matchesPhoto(f.plates) || f.plates.count !== DEFAULT_PLATES.count) {
+    const kg = f.value === null ? null : plateWeights(f, f.value).kg;
+    f.plates = { ...DEFAULT_PLATES, zero: true };
+    f.value = kg === null ? null : nearestPlate(f, kg);
+  }
+  f.plates.zero = true;
+}
+
 // The lowest position: -1 when the stack has a zero position, else 0.
 export const firstPosition = (field) => (field.plates.zero ? -1 : 0);
 
@@ -403,7 +440,7 @@ function stackFromDraft(f, prev, label) {
   } else if (Number.isFinite(prev?.value)) {
     s.value = nearestPlate(s, prev.value);
   }
-  return s;
+  return dropZeroPlate(s);
 }
 
 // Adds a machine or updates an existing one from an edit form draft:
