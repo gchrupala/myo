@@ -1,6 +1,10 @@
-// Offline support. App files are served from the cache at once and refreshed
-// in the background, so a new version shows up on the next launch.
-const APP_CACHE = 'myo-app-v1';
+// Offline support. App files are served from the cache at once.
+//
+// Bump VERSION with every change to the app files. The browser then installs
+// this worker again with the new files, and the page reloads into them
+// (see the controllerchange handler in js/app.js).
+const VERSION = 'v2';
+const APP_CACHE = `myo-app-${VERSION}`;
 const FONT_CACHE = 'myo-fonts';
 const APP_FILES = [
   './',
@@ -19,7 +23,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(APP_CACHE)
-      .then((cache) => cache.addAll(APP_FILES))
+      // 'reload' skips the HTTP cache, which could still hold the old files.
+      .then((cache) => cache.addAll(APP_FILES.map((url) => new Request(url, { cache: 'reload' }))))
       .then(() => self.skipWaiting()),
   );
 });

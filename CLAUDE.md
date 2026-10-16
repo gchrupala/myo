@@ -13,7 +13,7 @@ Aplikacja webowa (PWA) do zapisywania treningu na maszynach: ustawienia maszyn, 
 - `js/store.js`: model danych i zmiany stanu. Czysta logika bez DOM, z czasem przekazywanym jako argument.
 - `js/format.js`: formatowanie czasu, liczb, dat i polskich odmian.
 - `js/app.js`: widoki i obsługa zdarzeń.
-- `sw.js`: service worker. Nowe pliki aplikacji dopisz do `APP_FILES`.
+- `sw.js`: service worker. Nowe pliki aplikacji dopisz do `APP_FILES`. Przy każdej zmianie plików aplikacji podbij `VERSION`, inaczej telefony zostaną przy starej wersji z pamięci podręcznej.
 - `test/`: testy `node --test` dla `store.js` i `format.js`.
 
 ## Zasady

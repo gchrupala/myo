@@ -44,7 +44,7 @@ Po minucie aplikacja będzie pod adresem `https://gchrupala.github.io/myo/`. Ka�
 - **Android (Chrome):** otwórz adres, menu ⋮ → „Zainstaluj aplikację” albo „Dodaj do ekranu głównego”.
 - **iPhone (Safari):** otwórz adres, przycisk Udostępnij → „Do ekranu początkowego”.
 
-Nowa wersja pojawia się przy drugim uruchomieniu po aktualizacji (pierwsze pobiera ją w tle).
+Po aktualizacji nowa wersja ładuje się sama: chwilę po otwarciu aplikacja raz się przeładowuje. Zapisane dane i trwające ćwiczenie zostają.
 
 ## Praca nad kodem
 

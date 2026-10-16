@@ -1031,11 +1031,16 @@ app.addEventListener('submit', (e) => {
 document.addEventListener('visibilitychange', () => {
   updateWakeLock();
   renderLive();
+  // An installed app can stay open for days; look for a new version on return.
+  if (document.visibilityState === 'visible') swRegistration?.update().catch(() => {});
 });
 
 // ---------- start ----------
 
 try {
+  // The app sets the scroll position itself; a restored one after a reload
+  // would open a screen halfway down.
+  history.scrollRestoration = 'manual';
   history.replaceState({ depth: 1 }, '');
 } catch {
   historyOK = false;
@@ -1044,9 +1049,25 @@ if (state.active && S.getMachine(state, state.active.machineId)) go('exercise', 
 else render();
 setInterval(renderLive, 250);
 
+// Offline support and updates. When a new version of sw.js takes over, reload
+// once so the new files are used at once instead of on the next launch.
+// Everything the user did is saved, including an exercise in progress.
+let swRegistration = null;
 try {
   if ('serviceWorker' in navigator && window.isSecureContext) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
+    navigator.serviceWorker
+      .register('sw.js')
+      .then((reg) => {
+        swRegistration = reg;
+      })
+      .catch(() => {});
   }
 } catch {
   // Service workers are unavailable in some embedded frames.
