@@ -33,68 +33,54 @@ test('default machines', () => {
   );
 });
 
-test('counts reps, saves sets and measures rest between them', () => {
+test('saving a set records reps and settings and starts the rest', () => {
   const { state, row } = fresh();
   const [weight, seat] = row.fields;
   S.setStackPlate(state, row.id, weight.id, 8); // 76 kg, dial at 10 lb
   S.setFieldValue(state, row.id, seat.id, '4');
-  S.startExercise(state, row.id, sec(0));
-  S.addRep(state, sec(1));
-  S.addRep(state, sec(3));
-  S.addRep(state, sec(5));
-  const first = S.finishSet(state, sec(6));
-  assert.equal(first.reps, 3);
-  assert.equal(first.startedAt, sec(1));
-  assert.equal(first.restBeforeSec, null);
+  assert.equal(S.repsFor(state, row.id), S.DEFAULT_REPS);
+  S.setReps(state, row.id, '12');
+  const first = S.saveSet(state, row.id, sec(0));
+  assert.equal(first.reps, 12);
+  assert.equal(first.endedAt, sec(0));
   assert.equal(first.settings[0].value, 80.5);
   assert.deepEqual(first.settings[1], { label: 'Siedzisko', unit: '', value: 4 });
+  assert.equal(state.active.machineId, row.id);
   assert.equal(state.active.phase, 'rest');
-  assert.equal(S.restElapsedSec(state.active, sec(36)), 30);
+  assert.equal(S.restElapsedSec(state.active, sec(30)), 30);
 
-  // Settings changed during the rest apply to the next set only.
+  // The next set starts from the same reps; changes apply to it only.
+  S.stepReps(state, row.id, -2);
   S.stepField(state, row.id, seat.id, 1);
-  S.addRep(state, sec(101));
-  S.addRep(state, sec(103));
-  const second = S.finishSet(state, sec(104));
-  assert.equal(second.reps, 2);
-  assert.equal(second.restBeforeSec, 95);
+  const second = S.saveSet(state, row.id, sec(150));
+  assert.equal(second.reps, 10);
   assert.equal(second.settings[1].value, 5);
-  assert.equal(first.settings[1].value, 4);
+  assert.deepEqual([first.reps, first.settings[1].value], [12, 4]);
+  // Saving restarts the rest.
+  assert.equal(state.active.restStartedAt, sec(150));
   assert.equal(state.sets.length, 2);
 });
 
-test('starting the next set ends the rest and records it', () => {
+test('reps: whole numbers from 1 to 999, remembered per machine', () => {
   const { state, row } = fresh();
-  S.startExercise(state, row.id, sec(0));
-  S.addRep(state, sec(1));
-  S.finishSet(state, sec(2));
-  S.startSet(state, sec(72));
-  assert.equal(state.active.phase, 'set');
-  assert.equal(state.active.reps, 0);
-  // A set with no reps cannot be finished, and -1 does not go below zero.
-  S.removeRep(state);
-  assert.equal(state.active.reps, 0);
-  assert.equal(S.finishSet(state, sec(73)), null);
-  S.addRep(state, sec(75));
-  S.addRep(state, sec(77));
-  S.removeRep(state);
-  assert.equal(state.active.phase, 'set');
-  const set = S.finishSet(state, sec(80));
-  assert.equal(set.reps, 1);
-  assert.equal(set.startedAt, sec(72));
-  assert.equal(set.restBeforeSec, 70);
-  // Starting again while a set runs changes nothing.
-  S.startSet(state, sec(90));
-  S.startSet(state, sec(95));
-  assert.equal(state.active.setStartedAt, sec(90));
+  const chin = state.machines.find((m) => m.name === 'Podciąganie');
+  assert.equal(S.setReps(state, row.id, '0'), false);
+  assert.equal(S.setReps(state, row.id, '7,5'), false);
+  assert.equal(S.setReps(state, row.id, 'x'), false);
+  assert.equal(S.repsFor(state, row.id), S.DEFAULT_REPS);
+  S.setReps(state, row.id, '1');
+  S.stepReps(state, row.id, -1);
+  assert.equal(S.repsFor(state, row.id), 1);
+  assert.equal(S.repsFor(state, chin.id), S.DEFAULT_REPS);
+  // Without a remembered number, the latest saved set decides.
+  state.sets.push({ id: 's-old', machineId: chin.id, type: 'strength', endedAt: sec(-100), reps: 6, settings: [] });
+  assert.equal(S.repsFor(state, chin.id), 6);
 });
 
 test('rest alert fires once, and not for a passed target', () => {
   const { state, row } = fresh();
   S.setRestTarget(state, row.id, 60, sec(0));
-  S.startExercise(state, row.id, sec(0));
-  S.addRep(state, sec(1));
-  S.finishSet(state, sec(10));
+  S.saveSet(state, row.id, sec(10));
   assert.equal(S.checkRestAlert(state, sec(69)), null);
   assert.equal(S.checkRestAlert(state, sec(70)), 'alert');
   assert.equal(S.checkRestAlert(state, sec(71)), null);
@@ -110,8 +96,7 @@ test('rest alert fires once, and not for a passed target', () => {
   assert.equal(S.checkRestAlert(state, sec(103)), null);
 
   // Coming back long after the target: no sound.
-  S.addRep(state, sec(200));
-  S.finishSet(state, sec(201));
+  S.saveSet(state, row.id, sec(201));
   assert.equal(S.checkRestAlert(state, sec(400)), 'late');
 });
 
@@ -160,15 +145,12 @@ test('cardio stopwatch with pause', () => {
   assert.equal(entry.reps, null);
 });
 
-test('switching machines saves the unfinished set', () => {
+test('switching machines ends the rest of the previous one', () => {
   const { state, row, tread } = fresh();
-  S.startExercise(state, row.id, sec(0));
-  S.addRep(state, sec(1));
-  S.addRep(state, sec(2));
+  S.saveSet(state, row.id, sec(0));
   S.startExercise(state, tread.id, sec(10));
-  assert.equal(state.sets.length, 1);
-  assert.equal(state.sets[0].reps, 2);
   assert.equal(state.active.machineId, tread.id);
+  assert.equal(state.sets.length, 1);
   S.endExercise(state, sec(11));
   assert.equal(state.active, null);
   assert.equal(state.sets.length, 1);
@@ -207,8 +189,7 @@ test('editing a machine keeps setting values; deleting keeps history', () => {
     ['Oparcie', 1, null],
   ]);
 
-  S.startExercise(state, row.id, sec(0));
-  S.addRep(state, sec(1));
+  S.saveSet(state, row.id, sec(1));
   S.deleteMachine(state, row.id, sec(2));
   assert.equal(state.active, null);
   assert.equal(state.machines.some((m) => m.id === row.id), false);
@@ -241,16 +222,11 @@ test('body weight: one entry per day, steps from the last known value', () => {
 test('history groups by day and machine, newest day first', () => {
   const { state, row, tread } = fresh();
   const day1 = new Date(2026, 9, 14, 18, 0).getTime();
-  S.startExercise(state, row.id, day1);
-  S.addRep(state, day1 + 1000);
-  S.finishSet(state, day1 + 2000);
+  S.saveSet(state, row.id, day1 + 2000);
   S.endExercise(state, day1 + 3000);
 
-  S.startExercise(state, row.id, sec(0));
-  S.addRep(state, sec(1));
-  S.finishSet(state, sec(2));
-  S.addRep(state, sec(60));
-  S.finishSet(state, sec(61));
+  S.saveSet(state, row.id, sec(2));
+  S.saveSet(state, row.id, sec(61));
   S.startExercise(state, tread.id, sec(100));
   S.toggleCardio(state, sec(100));
   S.finishCardio(state, sec(700));
@@ -272,9 +248,8 @@ test('history groups by day and machine, newest day first', () => {
 
 test('save, load and import', () => {
   const { state, row } = fresh();
-  S.startExercise(state, row.id, sec(0));
-  S.addRep(state, sec(1));
-  S.finishSet(state, sec(2));
+  S.setReps(state, row.id, '8');
+  S.saveSet(state, row.id, sec(2));
   S.setBodyWeight(state, '2026-10-16', '80');
 
   const mem = new Map();
@@ -460,4 +435,12 @@ test('language preference is saved and checked', () => {
   assert.equal(S.parseState(JSON.stringify({ ...state, prefs: { sound: true, lang: 'es' } })).prefs.lang, 'es');
   assert.equal(S.parseState(JSON.stringify({ ...state, prefs: { sound: true, lang: 'xx' } })).prefs.lang, 'system');
   assert.equal(S.parseState(JSON.stringify({ ...state, prefs: { sound: false } })).prefs.lang, 'system');
+});
+
+test('an exercise saved by an older version, mid-set, loads as ready', () => {
+  const { state, row } = fresh();
+  const old = { ...state, active: { machineId: row.id, kind: 'strength', phase: 'set', reps: 4, setStartedAt: sec(0), restStartedAt: sec(-60), alerted: false } };
+  assert.deepEqual(S.parseState(JSON.stringify(old)).active, { machineId: row.id, kind: 'strength', phase: 'ready', restStartedAt: null, alerted: false });
+  const resting = { ...state, active: { machineId: row.id, kind: 'strength', phase: 'rest', reps: 0, setStartedAt: null, restStartedAt: sec(5), alerted: true } };
+  assert.deepEqual(S.parseState(JSON.stringify(resting)).active, { machineId: row.id, kind: 'strength', phase: 'rest', restStartedAt: sec(5), alerted: true });
 });

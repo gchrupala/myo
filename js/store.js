@@ -23,7 +23,7 @@
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 5;
+export const SCHEMA = 6;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
@@ -59,7 +59,7 @@ const energy = () => field('Energia', 'kcal', 10);
 const seat = () => field('Siedzisko', '', 1);
 
 function machine(name, type, fields) {
-  return { id: newId('m'), name, type, restTarget: DEFAULT_REST, fields };
+  return { id: newId('m'), name, type, restTarget: DEFAULT_REST, reps: null, fields };
 }
 
 // Stacks differ between machines. Cybex Eagle NX: a 10 lb top plate, then
@@ -183,6 +183,7 @@ export function parseState(input) {
       name: m.name,
       type: m.type === 'cardio' ? 'cardio' : 'strength',
       restTarget: positive(m.restTarget) ?? DEFAULT_REST,
+      reps: intIn(m.reps, 1, 999),
       fields: (Array.isArray(m.fields) ? m.fields : [])
         .filter((f) => f && typeof f.label === 'string')
         .map((f) => parseField(f, schema)),
@@ -202,7 +203,19 @@ export function parseState(input) {
   // Version 4 had one stack for all machines and no settings from a session.
   if (schema < 5) machines.filter((m) => m.type === 'strength').forEach(applySetup);
   const ids = new Set(machines.map((m) => m.id));
-  const active = data.active && ids.has(data.active.machineId) ? data.active : null;
+  let active = data.active && ids.has(data.active.machineId) ? data.active : null;
+  // Before version 6 a strength exercise could be in a 'set' phase with reps
+  // counted by taps. Now only 'ready' and 'rest' exist.
+  if (active?.kind === 'strength') {
+    const resting = active.phase === 'rest' && Number.isFinite(active.restStartedAt);
+    active = {
+      machineId: active.machineId,
+      kind: 'strength',
+      phase: resting ? 'rest' : 'ready',
+      restStartedAt: resting ? active.restStartedAt : null,
+      alerted: Boolean(active.alerted),
+    };
+  }
   const lang = ['system', 'pl', 'en', 'es'].includes(data.prefs?.lang) ? data.prefs.lang : 'system';
   return { schema: SCHEMA, machines, sets, bodyWeights, active, prefs: { sound: data.prefs?.sound !== false, lang } };
 }
@@ -384,7 +397,7 @@ export function saveMachine(state, draft, now) {
     Object.assign(existing, { name, type, fields });
     return existing;
   }
-  const m = { id: newId('m'), name, type, restTarget: DEFAULT_REST, fields };
+  const m = { id: newId('m'), name, type, restTarget: DEFAULT_REST, reps: null, fields };
   state.machines.push(m);
   return m;
 }
@@ -433,10 +446,11 @@ export function stepBodyWeight(state, day, direction, step = 0.1) {
 
 // ---------- the exercise in progress ----------
 //
-// Strength phases: 'ready' (no set yet), 'set' (counting reps),
-// 'rest' (timer running since the last set ended).
-// startSet ends the rest; its length is saved with the next set. The first
-// set of an exercise starts with its first rep.
+// Strength: the user does a set, sets the number of reps and saves it.
+// Saving starts the rest timer, which counts down to the machine's rest
+// target. Phases: 'ready' (no set saved yet) and 'rest'.
+
+export const DEFAULT_REPS = 10;
 
 function snapshot(m) {
   return m.fields.map(fieldSnapshot);
@@ -450,53 +464,58 @@ export function startExercise(state, machineId, now) {
   state.active =
     m.type === 'cardio'
       ? { machineId, kind: 'cardio', startedAt: null, elapsedMs: 0, runningSince: null }
-      : { machineId, kind: 'strength', phase: 'ready', reps: 0, setStartedAt: null, restStartedAt: null, alerted: false };
+      : { machineId, kind: 'strength', phase: 'ready', restStartedAt: null, alerted: false };
   return state.active;
 }
 
 const strengthActive = (state) => (state.active?.kind === 'strength' ? state.active : null);
 const cardioActive = (state) => (state.active?.kind === 'cardio' ? state.active : null);
 
-// Ends the rest (or the wait before the first set) and starts a set with no
-// reps counted yet.
-export function startSet(state, now) {
-  const a = strengthActive(state);
-  if (!a || a.phase === 'set') return;
-  Object.assign(a, { phase: 'set', setStartedAt: now, reps: 0 });
+// The reps to save with the next set: the number last set on the machine,
+// else the reps of its latest saved set, else DEFAULT_REPS.
+export function repsFor(state, machineId) {
+  const m = getMachine(state, machineId);
+  if (m?.reps) return m.reps;
+  let last = null;
+  for (const s of state.sets) {
+    if (s.machineId === machineId && s.reps > 0 && (!last || s.endedAt > last.endedAt)) last = s;
+  }
+  return last?.reps ?? DEFAULT_REPS;
 }
 
-export function addRep(state, now) {
-  const a = strengthActive(state);
-  if (!a) return;
-  if (a.phase !== 'set') startSet(state, now);
-  a.reps += 1;
+// Returns false and keeps the old number when the input is not a whole number from 1 to 999.
+export function setReps(state, machineId, input) {
+  const m = getMachine(state, machineId);
+  const n = parseNumber(input);
+  if (!m || intIn(n, 1, 999) === null) return false;
+  m.reps = n;
+  return true;
 }
 
-export function removeRep(state) {
-  const a = strengthActive(state);
-  if (!a || a.phase !== 'set') return;
-  a.reps = Math.max(0, a.reps - 1);
+export function stepReps(state, machineId, direction) {
+  const m = getMachine(state, machineId);
+  if (m) m.reps = clamp(repsFor(state, machineId) + direction, 1, 999);
 }
 
-export function finishSet(state, now) {
-  const a = strengthActive(state);
-  if (!a || a.phase !== 'set' || a.reps < 1) return null;
-  const m = getMachine(state, a.machineId);
-  if (!m) return null;
+// Saves a set with the current reps and settings and starts the rest.
+export function saveSet(state, machineId, now) {
+  const m = getMachine(state, machineId);
+  if (!m || m.type !== 'strength') return null;
+  const a = startExercise(state, machineId, now);
   const set = {
     id: newId('s'),
     machineId: m.id,
     machineName: m.name,
     type: 'strength',
-    startedAt: a.setStartedAt,
+    startedAt: null,
     endedAt: now,
-    reps: a.reps,
+    reps: repsFor(state, machineId),
     durationSec: null,
-    restBeforeSec: a.restStartedAt ? Math.round((a.setStartedAt - a.restStartedAt) / 1000) : null,
+    restBeforeSec: null,
     settings: snapshot(m),
   };
   state.sets.push(set);
-  Object.assign(a, { phase: 'rest', reps: 0, setStartedAt: null, restStartedAt: now, alerted: false });
+  Object.assign(a, { phase: 'rest', restStartedAt: now, alerted: false });
   return set;
 }
 
@@ -570,12 +589,11 @@ export function finishCardio(state, now) {
   return set;
 }
 
-// Ends the exercise. Unsaved work (reps counted, stopwatch time) is saved.
+// Ends the exercise. Stopwatch time not yet saved is saved.
 export function endExercise(state, now) {
   const a = state.active;
   if (!a) return;
-  if (a.kind === 'strength') finishSet(state, now);
-  else finishCardio(state, now);
+  if (a.kind === 'cardio') finishCardio(state, now);
   state.active = null;
 }
 

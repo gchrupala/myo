@@ -208,8 +208,6 @@ function banner() {
     status = `<span data-live="cardio">${formatDuration(S.cardioElapsedMs(a, now) / 1000)}</span>${a.runningSince ? '' : ` · ${t('banner.paused')}`}`;
   } else if (a.phase === 'rest') {
     status = `${t('banner.rest')} <span data-live="rest">${restClock(S.restElapsedSec(a, now), m.restTarget)}</span>`;
-  } else if (a.phase === 'set') {
-    status = t('banner.set', { reps: a.reps });
   } else {
     status = t('banner.waiting');
   }
@@ -221,11 +219,11 @@ function banner() {
   </button>`;
 }
 
-function stepper({ id, label, value, placeholder = '—', action, attrs = '', disabled = false }) {
+function stepper({ id, label, value, placeholder = '—', action, attrs = '', disabled = false, inputmode = 'decimal' }) {
   const dis = disabled ? ' disabled' : '';
   return `<div class="stepper">
     <button type="button" data-action="${action}" data-dir="-1" ${attrs} aria-label="${esc(t('aria.less', { label }))}"${dis}>−</button>
-    <input id="${esc(id)}" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" ${attrs} value="${esc(value)}" placeholder="${esc(placeholder)}">
+    <input id="${esc(id)}" type="text" inputmode="${inputmode}" autocomplete="off" enterkeyhint="done" ${attrs} value="${esc(value)}" placeholder="${esc(placeholder)}">
     <button type="button" data-action="${action}" data-dir="1" ${attrs} aria-label="${esc(t('aria.more', { label }))}"${dis}>+</button>
   </div>`;
 }
@@ -399,20 +397,17 @@ function ring(progress, live) {
 
 const bigClass = (text) => `plate-big${text.length > 5 ? ' is-long' : ''}`;
 
+// The circle is only the rest timer. Reps are set with the stepper and the
+// set is saved with one button, which starts the rest.
 function strengthControls(m, a, now, setsToday) {
-  const phase = a ? a.phase : 'ready';
+  const phase = a?.phase === 'rest' ? 'rest' : 'ready';
   const nextSet = setsToday.length + 1;
   let big;
   let sub;
   let hint;
   let progress = 0;
   let cls = `plate is-${phase}`;
-  if (phase === 'set') {
-    big = String(a.reps);
-    sub = t('plate.reps', { n: a.reps });
-    hint = `${t('hint.set', { n: nextSet })} · <span data-live="set">${formatDuration((now - a.setStartedAt) / 1000)}</span>`;
-    progress = 100;
-  } else if (phase === 'rest') {
+  if (phase === 'rest') {
     const elapsed = S.restElapsedSec(a, now);
     const done = elapsed >= m.restTarget;
     if (done) cls += ' is-done';
@@ -421,8 +416,8 @@ function strengthControls(m, a, now, setsToday) {
     hint = t(done ? 'hint.restDone' : 'hint.rest', { target: formatDuration(m.restTarget), n: nextSet });
     progress = restRing(elapsed, m.restTarget);
   } else {
-    big = '0';
-    sub = t('plate.reps', { n: 0 });
+    big = String(nextSet);
+    sub = t('plate.set');
     hint = t('hint.ready');
   }
   const bigHtml = phase === 'rest' ? `<span data-live="rest">${big}</span>` : big;
@@ -430,27 +425,22 @@ function strengthControls(m, a, now, setsToday) {
     (s) =>
       `<button class="seg" type="button" data-action="rest-target" data-sec="${s}" aria-pressed="${m.restTarget === s}">${formatDuration(s)}</button>`,
   ).join('');
-  // During the rest the circle is only a clock: a tap there must not end it.
-  // The next set starts with its own button.
-  const face = `${ring(progress, phase === 'rest')}
+  return `<section class="plate-zone" aria-label="${t('ex.timerAria')}">
+    <div class="${cls}" role="timer">
+      ${ring(progress, phase === 'rest')}
       <span class="plate-face">
-        ${phase === 'rest' ? '' : `<span class="sr">${t('ex.addRep')} </span>`}
         <span class="${bigClass(big)}">${bigHtml}</span>
         <span class="plate-sub">${sub}</span>
-      </span>`;
-  const plate =
-    phase === 'rest'
-      ? `<div class="${cls}" role="timer">${face}</div>`
-      : `<button class="${cls}" type="button" data-action="rep">${face}</button>`;
-  const buttons =
-    phase === 'rest'
-      ? `<button class="btn primary grow" type="button" data-action="start-set">${t('ex.startSet', { n: nextSet })}</button>`
-      : `<button class="btn" type="button" data-action="unrep" aria-label="${t('ex.removeRep')}"${phase === 'set' && a.reps > 0 ? '' : ' disabled'}>−1</button>
-      <button class="btn primary grow" type="button" data-action="finish-set"${phase === 'set' && a.reps > 0 ? '' : ' disabled'}>${t('ex.finishSet')}</button>`;
-  return `<section class="plate-zone" aria-label="${t('ex.counterAria')}">
-    ${plate}
+      </span>
+    </div>
     <p class="hint">${hint}</p>
-    <div class="controls">${buttons}</div>
+    <div class="save-row">
+      <div class="reps">
+        <label class="reps-label" for="reps-input">${t('ex.reps')}</label>
+        ${stepper({ id: 'reps-input', label: t('ex.reps'), value: String(S.repsFor(state, m.id)), action: 'reps-step', attrs: 'data-reps="1"', inputmode: 'numeric' })}
+      </div>
+      <button class="btn primary grow" type="button" data-action="save-set">${t('ex.saveSet', { n: nextSet })}</button>
+    </div>
   </section>
   <section class="rest-settings" aria-labelledby="rest-label">
     <h2 class="section-title" id="rest-label">${t('ex.restTarget')}</h2>
@@ -799,7 +789,6 @@ function renderLive() {
     }
     let text = null;
     if (kind === 'rest' && a.phase === 'rest') text = restClock(S.restElapsedSec(a, now), target);
-    else if (kind === 'set' && a.phase === 'set') text = formatDuration((now - a.setStartedAt) / 1000);
     else if (kind === 'cardio' && a.kind === 'cardio') text = formatDuration(S.cardioElapsedMs(a, now) / 1000);
     if (text !== null && el.textContent !== text) {
       el.textContent = text;
@@ -940,20 +929,12 @@ app.addEventListener('click', (e) => {
     case 'edit':
       go('edit', el.dataset.id);
       return;
-    case 'rep':
-      S.startExercise(state, machineId, now);
-      S.addRep(state, now);
+    case 'reps-step':
+      S.stepReps(state, machineId, Number(el.dataset.dir));
+      break;
+    case 'save-set':
+      S.saveSet(state, machineId, now);
       vibrate(15);
-      break;
-    case 'unrep':
-      S.removeRep(state);
-      break;
-    case 'start-set':
-      S.startSet(state, now);
-      vibrate(15);
-      break;
-    case 'finish-set':
-      S.finishSet(state, now);
       break;
     case 'end':
       S.endExercise(state, now);
@@ -1040,6 +1021,11 @@ app.addEventListener('change', (e) => {
     persist();
     const f = S.getMachine(state, machineId)?.fields.find((x) => x.id === t.dataset.field);
     t.value = valueText(f?.value);
+  } else if (t.dataset.reps) {
+    const machineId = current().machineId;
+    S.setReps(state, machineId, t.value);
+    persist();
+    t.value = String(S.repsFor(state, machineId));
   } else if (t.dataset.bw) {
     S.setBodyWeight(state, today(), t.value);
     persist();
@@ -1081,7 +1067,7 @@ app.addEventListener('input', (e) => {
 // Enter closes the phone keyboard and saves the value.
 app.addEventListener('keydown', (e) => {
   const t = e.target;
-  if (e.key === 'Enter' && t.tagName === 'INPUT' && (t.dataset.field || t.dataset.bw)) t.blur();
+  if (e.key === 'Enter' && t.tagName === 'INPUT' && (t.dataset.field || t.dataset.bw || t.dataset.reps)) t.blur();
 });
 
 app.addEventListener('submit', (e) => {

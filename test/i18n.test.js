@@ -24,7 +24,6 @@ test('Polish plural forms', () => {
   assert.deepEqual([1, 2, 4, 5, 12, 22, 25].map(sets), [
     '1 seria', '2 serie', '4 serie', '5 serii', '12 serii', '22 serie', '25 serii',
   ]);
-  assert.equal(t('plate.reps', { n: 0 }), 'powtórzeń');
   assert.equal(t('data.confirm', { machines: 1, sets: 3 }).split('.')[0], 'Plik zawiera 1 maszynę i 3 serie');
 });
 
@@ -43,7 +42,7 @@ test('English', () => {
   assert.equal(nameFor('Wiosłowanie'), 'Row');
   assert.equal(nameFor('Moja maszyna'), 'Moja maszyna');
   assert.equal(t('hint.rest', { target: '1:30' }), 'Rest target: 1:30.');
-  assert.equal(t('ex.startSet', { n: 2 }), 'Start set 2');
+  assert.equal(t('ex.saveSet', { n: 2 }), 'Save set 2');
 });
 
 test('Spanish', () => {

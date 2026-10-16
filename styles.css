@@ -726,8 +726,8 @@ input {
   position: relative;
   display: grid;
   place-items: center;
-  width: min(64vw, 15rem);
-  width: min(64vw, 34svh, 15rem);
+  width: min(58vw, 13.5rem);
+  width: min(58vw, 30svh, 13.5rem);
   max-width: 100%;
   aspect-ratio: 1;
   padding: 0;
@@ -825,6 +825,38 @@ div.plate {
 
 .plate-zone .controls .btn {
   min-height: 3rem;
+  font-size: 1.05rem;
+}
+
+/* Reps for the next set and the button that saves it. */
+.save-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.reps {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.reps-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reps .stepper input {
+  width: 3.4rem;
+}
+
+.save-row .btn.primary {
+  flex: 1;
+  min-width: 0;
+  min-height: calc(2.75rem + 2px);
   font-size: 1.05rem;
 }
 
@@ -1145,7 +1177,7 @@ div.plate {
   }
 
   .plate {
-    width: min(64vw, 30svh, 15rem);
+    width: min(58vw, 26svh, 13.5rem);
   }
 }
 
