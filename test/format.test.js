@@ -7,6 +7,7 @@ import {
   formatNumber,
   formatSettings,
   plural,
+  setHeadline,
   summarizeSets,
 } from '../js/format.js';
 
@@ -62,4 +63,20 @@ test('summarizeSets', () => {
   ];
   assert.equal(summarizeSets(sets), '3 serie: 12, 10, 8 powt.');
   assert.equal(summarizeSets([{ type: 'cardio', durationSec: 1500 }]), '25:00');
+});
+
+test('setHeadline: reps for strength, kcal first for cardio', () => {
+  const strength = { type: 'strength', reps: 12, settings: [{ label: 'Siedzisko', unit: '', value: 3 }] };
+  assert.deepEqual(setHeadline(strength), { main: '12 powt.', meta: 'Siedzisko 3' });
+  const settings = [
+    { label: 'Energia', unit: 'kcal', value: 320 },
+    { label: 'Prędkość', unit: 'km/h', value: 6.5 },
+    { label: 'Nachylenie', unit: '%', value: null },
+  ];
+  assert.deepEqual(setHeadline({ type: 'cardio', durationSec: 1500, settings }), { main: '320 kcal', meta: '25:00 · 6,5 km/h' });
+  assert.deepEqual(setHeadline({ type: 'cardio', durationSec: 0, settings }), { main: '320 kcal', meta: '6,5 km/h' });
+  const noEnergy = [{ ...settings[0], value: null }, settings[1]];
+  assert.deepEqual(setHeadline({ type: 'cardio', durationSec: 1500, settings: noEnergy }), { main: '25:00', meta: '6,5 km/h' });
+  assert.equal(summarizeSets([{ type: 'cardio', durationSec: 1500, settings }]), '320 kcal (25:00)');
+  assert.equal(summarizeSets([{ type: 'cardio', durationSec: 0, settings }]), '320 kcal');
 });

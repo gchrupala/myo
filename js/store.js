@@ -23,7 +23,7 @@
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 3;
+export const SCHEMA = 4;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
@@ -54,6 +54,8 @@ function stackField(label = 'Ciężar') {
   };
 }
 const weight = () => stackField();
+// The main setting of a treadmill: energy in kcal, as set or shown on it.
+const energy = () => field('Energia', 'kcal', 10);
 const seat = () => field('Siedzisko', '', 1);
 
 function machine(name, type, fields) {
@@ -69,7 +71,7 @@ export function defaultMachines() {
     machine('Wiosłowanie', 'strength', [weight(), seat()]),
     machine('Wyciskanie na klatkę', 'strength', [weight(), seat()]),
     machine('Pośladki', 'strength', [weight()]),
-    machine('Taśma', 'cardio', [field('Prędkość', 'km/h', 0.5), field('Nachylenie', '%', 1)]),
+    machine('Taśma', 'cardio', [energy(), field('Prędkość', 'km/h', 0.5), field('Nachylenie', '%', 1)]),
   ];
 }
 
@@ -164,6 +166,12 @@ export function parseState(input) {
   const bodyWeights = (Array.isArray(data.bodyWeights) ? data.bodyWeights : []).filter(
     (w) => w && /^\d{4}-\d{2}-\d{2}$/.test(w.day) && positive(w.kg),
   );
+  // Version 3 had no energy setting on the treadmill.
+  if (schema < 4) {
+    for (const m of machines) {
+      if (m.type === 'cardio' && m.name === 'Taśma' && !m.fields.some((f) => f.unit === 'kcal')) m.fields.unshift(energy());
+    }
+  }
   const ids = new Set(machines.map((m) => m.id));
   const active = data.active && ids.has(data.active.machineId) ? data.active : null;
   return { schema: SCHEMA, machines, sets, bodyWeights, active, prefs: { sound: data.prefs?.sound !== false } };
@@ -498,12 +506,24 @@ export function toggleCardio(state, now) {
   }
 }
 
+// The energy (kcal) setting of a machine, when it has one and it is filled in.
+export function energyKcal(m) {
+  const f = m?.fields.find((x) => x.kind !== 'stack' && x.unit === 'kcal');
+  return f && f.value > 0 ? f.value : null;
+}
+
+// A cardio entry needs stopwatch time or the energy in kcal.
+export function cardioCanFinish(state, machineId, now) {
+  const a = state.active?.machineId === machineId ? cardioActive(state) : null;
+  return cardioElapsedMs(a, now) >= 1000 || energyKcal(getMachine(state, machineId)) !== null;
+}
+
 export function finishCardio(state, now) {
   const a = cardioActive(state);
   if (!a) return null;
   const ms = cardioElapsedMs(a, now);
   const m = getMachine(state, a.machineId);
-  if (ms < 1000 || !m) return null;
+  if (!m || !cardioCanFinish(state, m.id, now)) return null;
   const set = {
     id: newId('s'),
     machineId: m.id,

@@ -100,6 +100,38 @@ test('rest alert fires once, and not for a passed target', () => {
   assert.equal(S.checkRestAlert(state, sec(400)), 'late');
 });
 
+test('treadmill: energy in kcal is the first setting', () => {
+  const { state, tread } = fresh();
+  assert.deepEqual(tread.fields.map((f) => [f.label, f.unit]), [['Energia', 'kcal'], ['Prędkość', 'km/h'], ['Nachylenie', '%']]);
+  assert.equal(S.cardioCanFinish(state, tread.id, sec(0)), false);
+  S.setFieldValue(state, tread.id, tread.fields[0].id, '320');
+  assert.equal(S.energyKcal(tread), 320);
+  // Energy alone is enough to save, without the stopwatch.
+  assert.equal(S.cardioCanFinish(state, tread.id, sec(0)), true);
+  S.startExercise(state, tread.id, sec(0));
+  S.endExercise(state, sec(1));
+  assert.equal(state.sets.length, 1);
+  assert.equal(state.sets[0].durationSec, 0);
+  assert.deepEqual(state.sets[0].settings[0], { label: 'Energia', unit: 'kcal', value: 320 });
+});
+
+test('version 3 data: the treadmill gets an energy setting', () => {
+  const v3 = {
+    schema: 3,
+    machines: [
+      { id: 'm1', name: 'Taśma', type: 'cardio', restTarget: 90, fields: [
+        { id: 'f1', kind: 'number', label: 'Prędkość', unit: 'km/h', step: 0.5, value: 6 },
+      ] },
+      { id: 'm2', name: 'Rower', type: 'cardio', restTarget: 90, fields: [] },
+    ],
+    sets: [],
+  };
+  const state = S.parseState(v3);
+  assert.deepEqual(state.machines[0].fields.map((f) => [f.label, f.unit, f.value]), [['Energia', 'kcal', null], ['Prędkość', 'km/h', 6]]);
+  assert.deepEqual(state.machines[1].fields, []);
+  assert.deepEqual(S.parseState(JSON.stringify(state)), state);
+});
+
 test('cardio stopwatch with pause', () => {
   const { state, tread } = fresh();
   S.startExercise(state, tread.id, sec(0));

@@ -60,6 +60,19 @@ export function formatDay(key, now = Date.now()) {
   return `${weekday} ${pad2(d)}.${pad2(m)}${year}`;
 }
 
+// The leading text of a saved set and the details after it. Strength sets
+// lead with reps; cardio leads with energy in kcal when it was recorded,
+// otherwise with the time.
+export function setHeadline(set) {
+  const settings = set.settings ?? [];
+  if (set.type !== 'cardio') return { main: `${set.reps} powt.`, meta: formatSettings(settings) };
+  const kcal = settings.find((f) => f.unit === 'kcal' && f.value !== null && f.value !== undefined);
+  const time = set.durationSec > 0 ? formatDuration(set.durationSec) : '';
+  if (!kcal) return { main: time, meta: formatSettings(settings) };
+  const rest = formatSettings(settings.filter((f) => f !== kcal));
+  return { main: `${formatNumber(kcal.value)} kcal`, meta: [time, rest].filter(Boolean).join(' · ') };
+}
+
 // One-line summary of a session on one machine.
 export function summarizeSets(sets) {
   const strength = sets.filter((s) => s.type !== 'cardio');
@@ -69,6 +82,16 @@ export function summarizeSets(sets) {
     const n = strength.length;
     parts.push(`${n} ${plural(n, 'seria', 'serie', 'serii')}: ${strength.map((s) => s.reps).join(', ')} powt.`);
   }
-  if (cardio.length) parts.push(cardio.map((s) => formatDuration(s.durationSec)).join(', '));
+  if (cardio.length) {
+    parts.push(
+      cardio
+        .map((s) => {
+          const { main } = setHeadline(s);
+          const time = s.durationSec > 0 ? formatDuration(s.durationSec) : '';
+          return main === time || !time ? main : `${main} (${time})`;
+        })
+        .join(', '),
+    );
+  }
   return parts.join(' · ');
 }

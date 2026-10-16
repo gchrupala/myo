@@ -7,8 +7,8 @@ import {
   formatDuration,
   formatField,
   formatNumber,
-  formatSettings,
   plural,
+  setHeadline,
   summarizeSets,
 } from './format.js';
 
@@ -447,7 +447,7 @@ function strengthControls(m, a, now, setsToday) {
   </section>`;
 }
 
-function cardioControls(a, now) {
+function cardioControls(m, a, now) {
   const ms = a ? S.cardioElapsedMs(a, now) : 0;
   const running = Boolean(a?.runningSince);
   const started = ms > 0 || running;
@@ -466,7 +466,7 @@ function cardioControls(a, now) {
     </button>
     <p class="hint">${hint}</p>
     <div class="controls">
-      <button class="btn primary grow" type="button" data-action="cardio-finish"${ms >= 1000 ? '' : ' disabled'}>Zapisz i zakończ</button>
+      <button class="btn primary grow" type="button" data-action="cardio-finish"${S.cardioCanFinish(state, m.id, now) ? '' : ' disabled'}>Zapisz i zakończ</button>
     </div>
   </section>`;
 }
@@ -479,8 +479,7 @@ function setRows(sets, deletable) {
         i > 0 && s.restBeforeSec !== null && s.restBeforeSec !== undefined
           ? `<li class="rest-row"><span>odpoczynek ${formatDuration(s.restBeforeSec)}</span></li>`
           : '';
-      const main = s.type === 'cardio' ? formatDuration(s.durationSec) : `${s.reps} powt.`;
-      const meta = formatSettings(s.settings);
+      const { main, meta } = setHeadline(s);
       const confirming = ui.confirm === `set:${s.id}`;
       const del = deletable
         ? `<button class="set-del${confirming ? ' is-confirm' : ''}" type="button" data-action="del-set" data-id="${esc(s.id)}">${confirming ? 'Usunąć?' : 'Usuń'}</button>`
@@ -510,7 +509,7 @@ function viewExercise() {
   const day = dayKey(now);
   const setsToday = S.setsOn(state, m.id, day);
   const prev = S.lastSession(state, m.id, day);
-  const controls = m.type === 'cardio' ? cardioControls(a, now) : strengthControls(m, a, now, setsToday);
+  const controls = m.type === 'cardio' ? cardioControls(m, a, now) : strengthControls(m, a, now, setsToday);
   const end =
     a && m.type !== 'cardio' ? '<button class="btn wide" type="button" data-action="end">Zakończ ćwiczenie</button>' : '';
   return `${subBar(m.name, `<button class="btn small" type="button" data-action="edit" data-id="${esc(m.id)}">Edytuj</button>`)}
@@ -530,14 +529,19 @@ function viewExercise() {
 function dayTotals(blocks, bodyWeight) {
   const sets = blocks.flatMap((b) => b.sets);
   const strength = sets.filter((s) => s.type !== 'cardio');
-  const cardioSec = sets.filter((s) => s.type === 'cardio').reduce((n, s) => n + s.durationSec, 0);
+  const cardio = sets.filter((s) => s.type === 'cardio');
+  const cardioSec = cardio.reduce((n, s) => n + (s.durationSec || 0), 0);
+  const kcal = cardio.reduce((n, s) => n + (s.settings?.find((f) => f.unit === 'kcal')?.value || 0), 0);
   const parts = [];
   if (bodyWeight !== null) parts.push(`waga ${formatNumber(bodyWeight)} kg`);
   if (strength.length) {
     const reps = strength.reduce((n, s) => n + s.reps, 0);
     parts.push(`${strength.length} ${plural(strength.length, 'seria', 'serie', 'serii')}, ${reps} powt.`);
   }
-  if (cardioSec) parts.push(`cardio ${formatDuration(cardioSec)}`);
+  if (cardio.length) {
+    const cardioParts = [kcal ? `${formatNumber(kcal)} kcal` : '', cardioSec ? formatDuration(cardioSec) : ''];
+    parts.push(`cardio ${cardioParts.filter(Boolean).join(', ')}`);
+  }
   return parts.join(' · ');
 }
 
@@ -741,6 +745,8 @@ function renderLive() {
     render({ preserveFocus: true });
     return;
   }
+  const finish = app.querySelector('[data-action="cardio-finish"]');
+  if (finish) finish.disabled = !S.cardioCanFinish(state, current().machineId, now);
   const a = state.active;
   if (!a) return;
   for (const el of app.querySelectorAll('[data-live]')) {
@@ -758,10 +764,6 @@ function renderLive() {
       el.textContent = text;
       el.closest('.plate-big')?.classList.toggle('is-long', text.length > 5);
     }
-  }
-  const finish = app.querySelector('[data-action="cardio-finish"]');
-  if (finish && a.kind === 'cardio' && current().machineId === a.machineId) {
-    finish.disabled = S.cardioElapsedMs(a, now) < 1000;
   }
 }
 
@@ -930,6 +932,8 @@ app.addEventListener('click', (e) => {
       S.toggleCardio(state, now);
       break;
     case 'cardio-finish':
+      // Energy alone can be saved without starting the stopwatch.
+      S.startExercise(state, machineId, now);
       S.endExercise(state, now);
       persist();
       back();
