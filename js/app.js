@@ -325,12 +325,7 @@ function stackSetting(f) {
   const id = esc(f.id);
   const snap = S.fieldSnapshot(f);
   const total = snap.value === null ? '—' : `${formatNumber(snap.value)} kg`;
-  const detail =
-    snap.value === null
-      ? 'Dotknij płytki, w którą wkładasz bolec.'
-      : `Płytka ${snap.plate}: ${formatNumber(snap.plateKg)} kg / ${formatNumber(snap.plateLb)} lb${
-          snap.dial ? `, tarcza +${formatNumber(snap.dial)} ${snap.dialUnit}` : ''
-        }`;
+  const hint = snap.value === null ? '<p class="field-note">Dotknij płytki, w którą wkładasz bolec.</p>' : '';
   const rows = Array.from({ length: f.plates.count }, (_, i) => {
     const w = S.plateWeights(f, i);
     const pinned = f.value === i;
@@ -343,14 +338,13 @@ function stackSetting(f) {
   }).join('');
   const last = f.dial ? f.dial.count - 1 : 0;
   const dial = f.dial
-    ? `<div class="dial" role="group" aria-label="Tarcza">
-        <span class="dial-name">Tarcza</span>
+    ? `<div class="dial" role="group" aria-label="Tarcza, ${esc(f.dial.unit)}">
         <span class="dial-knob">${KNOB_ARROWS}<span class="dial-window">${formatNumber(S.dialValue(f))}</span></span>
-        <span class="dial-unit">${esc(f.dial.unit)}</span>
         <span class="dial-buttons">
           <button type="button" data-action="dial" data-field="${id}" data-dir="-1" aria-label="Tarcza: mniej"${f.dialPos <= 0 ? ' disabled' : ''}>−</button>
           <button type="button" data-action="dial" data-field="${id}" data-dir="1" aria-label="Tarcza: więcej"${f.dialPos >= last ? ' disabled' : ''}>+</button>
         </span>
+        <span class="dial-unit">tarcza, ${esc(f.dial.unit)}</span>
       </div>`
     : '';
   return `<div class="stack-field">
@@ -358,7 +352,7 @@ function stackSetting(f) {
       <span class="stack-label" id="lbl-${id}">${esc(f.label)}</span>
       <span class="stack-total">${total}</span>
     </div>
-    <p class="field-note">${esc(detail)}</p>
+    ${hint}
     <div class="stack-body">
       <div class="stack" role="group" aria-labelledby="lbl-${id}">
         <div class="stack-cols" aria-hidden="true"><span>lb</span><span></span><span>kg</span></div>
@@ -413,7 +407,7 @@ function strengthControls(m, a, now, setsToday) {
     sub = 'odpoczynek';
     hint = done
       ? `Minął cel ${formatDuration(m.restTarget)}. Czas na serię ${nextSet}.`
-      : `Cel ${formatDuration(m.restTarget)}. Dotknij przy pierwszym powtórzeniu serii ${nextSet}.`;
+      : `Cel ${formatDuration(m.restTarget)}. Dotknij, gdy zaczniesz serię ${nextSet}.`;
     progress = Math.min(100, (elapsed / m.restTarget) * 100);
   } else {
     big = '0';
