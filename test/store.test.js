@@ -322,7 +322,7 @@ test('weight stack settings from the edit form', () => {
     }],
   }, sec(0));
   const g = row.fields[0];
-  assert.deepEqual(g.plates, { count: 8, kgFirst: 5, kgStep: 5, lbFirst: 10, lbStep: 10 });
+  assert.deepEqual(g.plates, { count: 8, kgFirst: 5, kgStep: 5, lbFirst: 10, lbStep: 10, zero: false });
   assert.deepEqual(g.dial, { count: 2, step: 2.5, unit: 'kg' });
   assert.equal(g.value, 7); // clamped to the last plate
   assert.equal(g.dialPos, 1);
@@ -443,4 +443,38 @@ test('an exercise saved by an older version, mid-set, loads as ready', () => {
   assert.deepEqual(S.parseState(JSON.stringify(old)).active, { machineId: row.id, kind: 'strength', phase: 'ready', restStartedAt: null, alerted: false });
   const resting = { ...state, active: { machineId: row.id, kind: 'strength', phase: 'rest', reps: 0, setStartedAt: null, restStartedAt: sec(5), alerted: true } };
   assert.deepEqual(S.parseState(JSON.stringify(resting)).active, { machineId: row.id, kind: 'strength', phase: 'rest', restStartedAt: sec(5), alerted: true });
+});
+
+test('assisted machines: a 0 kg position above the plates', () => {
+  const { state, row } = fresh();
+  const chin = state.machines.find((m) => m.name === 'Podciąganie');
+  const dips = state.machines.find((m) => m.name === 'Pompki na poręczach');
+  const f = chin.fields[0];
+  assert.equal(f.plates.zero, true);
+  assert.equal(dips.fields[0].plates.zero, true);
+  assert.equal(row.fields[0].plates.zero, false);
+  S.setStackPlate(state, chin.id, f.id, -5);
+  assert.equal(f.value, -1);
+  assert.equal(S.stackTotalKg(f), 0);
+  assert.equal(formatField(S.fieldSnapshot(f)), '0 kg');
+  S.stepDial(state, chin.id, f.id, 1);
+  assert.equal(formatField(S.fieldSnapshot(f)), '0 kg + 5 lb');
+  assert.equal(S.nearestPlate(f, 1), -1);
+  // Without the zero position the pin cannot go above the top plate.
+  S.setStackPlate(state, row.id, row.fields[0].id, -1);
+  assert.equal(row.fields[0].value, 0);
+  // Saved and reloaded, 0 kg stays; turning the option off moves the pin to the top plate.
+  assert.equal(S.parseState(JSON.stringify(state)).machines.find((m) => m.id === chin.id).fields[0].value, -1);
+  S.saveMachine(state, { id: chin.id, name: chin.name, type: 'strength', fields: [{ id: f.id, kind: 'stack', label: 'Ciężar', plates: { zero: false }, dial: { count: '4', step: '5', unit: 'lb' } }] }, sec(0));
+  assert.equal(chin.fields[0].value, 0);
+});
+
+test('version 6 data: chin-up and dips get the 0 kg position', () => {
+  const v6 = S.createState();
+  for (const m of v6.machines) for (const f of m.fields) if (f.kind === 'stack') f.plates.zero = false;
+  v6.schema = 6;
+  const state = S.parseState(JSON.stringify(v6));
+  const zero = (name) => state.machines.find((m) => m.name === name).fields[0].plates.zero;
+  assert.deepEqual(['Podciąganie', 'Pompki na poręczach', 'Wiosłowanie'].map(zero), [true, true, false]);
+  assert.equal(state.machines.find((m) => m.name === 'Podciąganie').fields[0].value, 3);
 });

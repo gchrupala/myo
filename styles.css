@@ -1154,6 +1154,10 @@ div.plate {
   transform: translateY(-50%);
 }
 
+.draft-wide {
+  grid-column: 1 / -1;
+}
+
 .draft-hint {
   color: var(--muted);
   font-size: 0.85rem;

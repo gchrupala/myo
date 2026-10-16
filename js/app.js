@@ -337,10 +337,12 @@ function stackSetting(f) {
   const snap = S.fieldSnapshot(f);
   const total = snap.value === null ? '—' : `${formatNumber(snap.value)} kg`;
   const hint = snap.value === null ? `<p class="field-note">${t('stack.hint')}</p>` : '';
-  const rows = Array.from({ length: f.plates.count }, (_, i) => {
+  const first = S.firstPosition(f);
+  const rows = Array.from({ length: f.plates.count - first }, (_, k) => {
+    const i = k + first;
     const w = S.plateWeights(f, i);
     const pinned = f.value === i;
-    const lifted = f.value !== null && i <= f.value;
+    const lifted = f.value !== null && i >= 0 && i <= f.value;
     return `<button class="stack-row${lifted ? ' is-lifted' : ''}" type="button" data-action="plate" data-field="${id}" data-i="${i}" aria-pressed="${pinned}" aria-label="${formatNumber(w.lb)} lb, ${formatNumber(w.kg)} kg">
       <span class="stack-lb">${formatNumber(w.lb)}</span>
       <span class="stack-hole${pinned ? ' is-pin' : ''}"></span>
@@ -625,6 +627,7 @@ function draftField(f = {}) {
       kgStep: formatNumber(p.kgStep),
       lbFirst: formatNumber(p.lbFirst),
       lbStep: formatNumber(p.lbStep),
+      zero: Boolean(p.zero),
     },
     dial: d
       ? { count: String(d.count), step: formatNumber(d.step), unit: d.unit }
@@ -667,6 +670,7 @@ function draftFieldRow(f, i) {
           <select id="d-dial-unit-${i}" data-draft="dial.unit" data-i="${i}" aria-label="${t('edit.dialUnit')}">
             ${option('lb', 'lb', f.dial.unit)}${option('kg', 'kg', f.dial.unit)}
           </select>
+          <label class="check draft-wide"><input id="d-plates-zero-${i}" type="checkbox" data-draft="plates.zero" data-i="${i}"${f.plates.zero ? ' checked' : ''}> ${t('edit.zero')}</label>
         </div>`
       : `<div class="draft-grid">
           <label for="d-unit-${i}">${t('edit.unit')}</label>
@@ -1060,8 +1064,9 @@ app.addEventListener('input', (e) => {
   }
   const f = ui.draft.fields[Number(t.dataset.i)];
   const [group, key] = prop.split('.');
-  if (key) f[group][key] = t.value;
-  else f[group] = t.value;
+  const value = t.type === 'checkbox' ? t.checked : t.value;
+  if (key) f[group][key] = value;
+  else f[group] = value;
 });
 
 // Enter closes the phone keyboard and saves the value.

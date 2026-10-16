@@ -17,18 +17,20 @@
 //           plate (0 = top) or null; plates describes the kg and lb labels
 //           printed beside the plates; dial is the add-on weight knob
 //           ({ count, step, unit }, value = position * step) or null.
+//           With plates.zero there is also position -1: no plate, 0 kg (the
+//           pin out, on assisted machines no assistance).
 // Each saved set keeps a copy of the settings it was done with
 // (see fieldSnapshot).
 
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 6;
+export const SCHEMA = 7;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
 // From a Cybex selector panel: 13 plates labelled 10–112 lb and 4.5–52.5 kg.
-export const DEFAULT_PLATES = { count: 13, kgFirst: 4.5, kgStep: 4, lbFirst: 10, lbStep: 8.5 };
+export const DEFAULT_PLATES = { count: 13, kgFirst: 4.5, kgStep: 4, lbFirst: 10, lbStep: 8.5, zero: false };
 // The add-on weight knob (Cybex Twist Select): its window shows 0, 5, 10, 15 lb
 // on the chin-up and dip machines. Other machines may differ.
 export const DEFAULT_DIAL = { count: 4, step: 5, unit: 'lb' };
@@ -66,13 +68,13 @@ function machine(name, type, fields) {
 // 20 lb plates, labelled 4.5, 13.5, 22.5 … kg; it fits the overhead and chest
 // press readings. Abdominal and row read 67 kg, which is on neither stack;
 // 9 kg plates from 4 kg is an assumption until their panels are checked.
-const EAGLE_PLATES = { count: 12, kgFirst: 4.5, kgStep: 9, lbFirst: 10, lbStep: 20 };
-const HEAVY_PLATES = { count: 12, kgFirst: 4, kgStep: 9, lbFirst: 10, lbStep: 20 };
+const EAGLE_PLATES = { count: 12, kgFirst: 4.5, kgStep: 9, lbFirst: 10, lbStep: 20, zero: false };
+const HEAVY_PLATES = { count: 12, kgFirst: 4, kgStep: 9, lbFirst: 10, lbStep: 20, zero: false };
 
 // Stacks and settings (plate kg + dial lb) from the session of 16 Oct 2026.
 const MACHINE_SETUP = {
-  'Podciąganie': { kg: 16.5, dial: 0 },
-  'Pompki na poręczach': { kg: 8.5, dial: 0 },
+  'Podciąganie': { kg: 16.5, dial: 0, zero: true },
+  'Pompki na poręczach': { kg: 8.5, dial: 0, zero: true },
   'Brzuch': { plates: HEAVY_PLATES, kg: 67, dial: 10 },
   'Wyciskanie nad głowę': { plates: EAGLE_PLATES, kg: 31.5, dial: 15 },
   'Wiosłowanie': { plates: HEAVY_PLATES, kg: 67, dial: 10 },
@@ -84,6 +86,7 @@ function applySetup(m) {
   const f = m.fields.find((x) => x.kind === 'stack');
   if (!setup || !f) return m;
   if (setup.plates) f.plates = { ...setup.plates };
+  if (setup.zero) f.plates.zero = true;
   f.value = nearestPlate(f, setup.kg);
   f.dialPos = f.dial ? clamp(Math.round(setup.dial / f.dial.step), 0, f.dial.count - 1) : 0;
   return m;
@@ -120,6 +123,7 @@ function parsePlates(p = {}) {
     kgStep: positive(p.kgStep) ?? DEFAULT_PLATES.kgStep,
     lbFirst: nonNegative(p.lbFirst) ?? DEFAULT_PLATES.lbFirst,
     lbStep: positive(p.lbStep) ?? DEFAULT_PLATES.lbStep,
+    zero: p.zero === true,
   };
 }
 
@@ -147,7 +151,7 @@ function parseField(f, schema) {
       id,
       kind: 'stack',
       label: f.label,
-      value: intIn(f.value, 0, plates.count - 1),
+      value: intIn(f.value, plates.zero ? -1 : 0, plates.count - 1),
       dialPos: dial ? (intIn(f.dialPos, 0, dial.count - 1) ?? 0) : 0,
       plates,
       dial,
@@ -202,6 +206,13 @@ export function parseState(input) {
   }
   // Version 4 had one stack for all machines and no settings from a session.
   if (schema < 5) machines.filter((m) => m.type === 'strength').forEach(applySetup);
+  // Version 6 had no 0 kg position; the chin-up and dip machines are assisted.
+  if (schema < 7) {
+    for (const m of machines) {
+      if (!MACHINE_SETUP[m.name]?.zero) continue;
+      for (const f of m.fields) if (f.kind === 'stack') f.plates.zero = true;
+    }
+  }
   const ids = new Set(machines.map((m) => m.id));
   let active = data.active && ids.has(data.active.machineId) ? data.active : null;
   // Before version 6 a strength exercise could be in a 'set' phase with reps
@@ -278,19 +289,24 @@ export function stepField(state, machineId, fieldId, direction) {
 
 // ---------- weight stacks ----------
 
-// The labels printed beside plate number `index` (0 = top plate).
+// The labels printed beside plate number `index` (0 = top plate; -1 is the
+// zero position).
 export function plateWeights(field, index) {
   const p = field.plates;
+  if (index < 0) return { kg: 0, lb: 0 };
   return { kg: round(p.kgFirst + index * p.kgStep), lb: round(p.lbFirst + index * p.lbStep) };
 }
+
+// The lowest position: -1 when the stack has a zero position, else 0.
+export const firstPosition = (field) => (field.plates.zero ? -1 : 0);
 
 export function dialValue(field, pos = field.dialPos) {
   return field.dial ? round(pos * field.dial.step) : 0;
 }
 
 export function nearestPlate(field, kg) {
-  let best = 0;
-  for (let i = 1; i < field.plates.count; i++) {
+  let best = firstPosition(field);
+  for (let i = best + 1; i < field.plates.count; i++) {
     if (Math.abs(plateWeights(field, i).kg - kg) < Math.abs(plateWeights(field, best).kg - kg)) best = i;
   }
   return best;
@@ -308,7 +324,7 @@ export function stackTotalKg(field) {
 export function setStackPlate(state, machineId, fieldId, index) {
   const f = getField(state, machineId, fieldId);
   if (!f || f.kind !== 'stack' || !Number.isInteger(index)) return;
-  f.value = clamp(index, 0, f.plates.count - 1);
+  f.value = clamp(index, firstPosition(f), f.plates.count - 1);
 }
 
 export function stepDial(state, machineId, fieldId, direction) {
@@ -356,11 +372,12 @@ function stackFromDraft(f, prev, label) {
     kgStep: num(f.plates?.kgStep),
     lbFirst: num(f.plates?.lbFirst),
     lbStep: num(f.plates?.lbStep),
+    zero: f.plates?.zero === true,
   });
   const dial = parseDial({ count: num(f.dial?.count), step: num(f.dial?.step), unit: f.dial?.unit });
   const s = { id: prev?.id ?? newId('f'), kind: 'stack', label, value: null, dialPos: 0, plates, dial };
   if (prev?.kind === 'stack') {
-    s.value = prev.value === null ? null : Math.min(prev.value, plates.count - 1);
+    s.value = prev.value === null ? null : clamp(prev.value, firstPosition(s), plates.count - 1);
     s.dialPos = dial ? Math.min(prev.dialPos, dial.count - 1) : 0;
   } else if (Number.isFinite(prev?.value)) {
     s.value = nearestPlate(s, prev.value);
@@ -450,7 +467,7 @@ export function stepBodyWeight(state, day, direction, step = 0.1) {
 // Saving starts the rest timer, which counts down to the machine's rest
 // target. Phases: 'ready' (no set saved yet) and 'rest'.
 
-export const DEFAULT_REPS = 10;
+export const DEFAULT_REPS = 8;
 
 function snapshot(m) {
   return m.fields.map(fieldSnapshot);
