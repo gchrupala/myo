@@ -13,6 +13,15 @@
   --go: #e0a800;
   --go-soft: #fbefc8;
   --danger: #bf332d;
+  /* The black selector panel and yellow pin of the machines. */
+  --panel: #16191e;
+  --panel-lift: #252a32;
+  --panel-line: #2c323b;
+  --panel-ink: #f3f5f8;
+  --panel-muted: #8e98a5;
+  --panel-hole: #050608;
+  --pin: #f5c518;
+  --pin-ink: #16191e;
 
   --font-display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif-condensed, sans-serif;
   --font-num: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif-condensed, sans-serif;
@@ -38,6 +47,14 @@
     --go: #f2c230;
     --go-soft: #3a3112;
     --danger: #ff7068;
+    --panel: #1f242b;
+    --panel-lift: #2b313a;
+    --panel-line: #353c46;
+    --panel-ink: #f3f5f8;
+    --panel-muted: #8e98a5;
+    --panel-hole: #0a0c0f;
+    --pin: #f2c230;
+    --pin-ink: #16191e;
     color-scheme: dark;
   }
 }
@@ -54,6 +71,14 @@
   --go: #f2c230;
   --go-soft: #3a3112;
   --danger: #ff7068;
+  --panel: #1f242b;
+  --panel-lift: #2b313a;
+  --panel-line: #353c46;
+  --panel-ink: #f3f5f8;
+  --panel-muted: #8e98a5;
+  --panel-hole: #0a0c0f;
+  --pin: #f2c230;
+  --pin-ink: #16191e;
   color-scheme: dark;
 }
 
@@ -403,6 +428,220 @@ input {
 
 .body-weight .stepper {
   background: var(--bg);
+}
+
+/* ---------- weight stack ---------- */
+
+.stack-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.stack-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.stack-label {
+  font-weight: 600;
+}
+
+.stack-total {
+  font: 700 1.7rem/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.stack-field .field-note {
+  margin-top: -0.35rem;
+}
+
+.stack-body {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.stack {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.4rem 0.4rem;
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--panel-ink);
+}
+
+.stack-cols,
+.stack-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.4rem minmax(0, 1fr);
+  align-items: center;
+}
+
+.stack-cols {
+  padding: 0 0.3rem 0.25rem;
+  color: var(--panel-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.stack-cols span:first-child,
+.stack-lb {
+  text-align: right;
+}
+
+.stack-kg {
+  text-align: left;
+}
+
+.stack-list {
+  position: relative;
+  height: calc(5 * 2.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y proximity;
+  scrollbar-width: none;
+  /* Fade the ends so it reads as a column that continues. */
+  mask-image: linear-gradient(transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+}
+
+.stack-list::-webkit-scrollbar {
+  display: none;
+}
+
+.stack-row {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 0.3rem;
+  border: 0;
+  border-top: 1px solid var(--panel-line);
+  border-radius: 0;
+  background: none;
+  color: var(--panel-ink);
+  font: 600 1.3rem/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  scroll-snap-align: center;
+  cursor: pointer;
+}
+
+.stack-row:first-child {
+  border-top: 0;
+}
+
+/* Plates that the pin lifts: the pinned one and all above it. */
+.stack-row.is-lifted {
+  background: var(--panel-lift);
+}
+
+.stack-row[aria-pressed="true"] {
+  color: var(--pin);
+}
+
+.stack-row:focus-visible {
+  outline-offset: -3px;
+}
+
+.stack-hole {
+  justify-self: center;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--panel-hole);
+  box-shadow: 0 0 0 1px var(--panel-line);
+}
+
+.stack-hole.is-pin {
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 2px solid var(--pin-ink);
+  background: radial-gradient(circle, var(--pin-ink) 0 18%, var(--pin) 22%);
+  box-shadow: none;
+}
+
+.dial {
+  display: grid;
+  flex: none;
+  justify-items: center;
+  gap: 0.35rem;
+  width: 6.75rem;
+}
+
+.dial-name {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dial-knob {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 5.25rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--pin);
+  box-shadow: 0 0 0 0.35rem var(--panel);
+}
+
+.dial-knob svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.dial-knob path {
+  fill: none;
+  stroke: var(--pin-ink);
+  stroke-width: 7;
+}
+
+.dial-knob polygon {
+  fill: var(--pin-ink);
+}
+
+.dial-window {
+  position: relative;
+  margin-top: 1.6rem;
+  min-width: 2.1rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--pin);
+  font: 700 1.3rem/1.1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.dial-unit {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.dial-buttons {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.dial-buttons button {
+  width: 3.1rem;
+  height: var(--tap);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dial-buttons button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* ---------- machine list ---------- */
@@ -799,23 +1038,72 @@ input {
   color: var(--ink);
 }
 
-.draft-head,
+.edit select {
+  min-height: var(--tap);
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
 .draft-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 4.5rem 4rem var(--tap);
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.edit .draft-field input[type="text"],
+.edit .draft-field select {
+  background: var(--bg);
+}
+
+.draft-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto var(--tap);
   align-items: center;
   gap: 0.5rem;
 }
 
-.draft-head {
+.draft-main .icon-btn {
+  margin: 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 1.6rem;
 }
 
-.draft-field .icon-btn {
-  margin: 0;
-  font-size: 1.6rem;
+.draft-grid {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.suffix {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.edit .suffix input[type="text"] {
+  padding-right: 2.4rem;
+}
+
+.suffix > span {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
   color: var(--muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.draft-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .danger-zone {

@@ -5,6 +5,7 @@ Dziennik treningu na maszynach na siłowni. Działa w przeglądarce telefonu i d
 ## Co robi
 
 - **Maszyny z ustawieniami.** Każda maszyna ma swoje ustawienia, na przykład ciężar i pozycję siedziska. Aplikacja pamięta ostatnie wartości. Ustawienia można dodawać, zmieniać i usuwać w edycji maszyny.
+- **Stos ciężarków jak na maszynie.** Ciężar wybiera się tak jak na panelu maszyny: lista płytek z opisem w funtach (lb) i kilogramach, bolec w wybranej płytce i tarcza do małych dodatków. Aplikacja zapisuje płytkę, pozycję tarczy i przybliżoną sumę w kg. Liczbę płytek, ich opisy i tarczę ustawia się w edycji maszyny. Domyślnie: 13 płytek, 10–112 lb i 4,5–52,5 kg, tarcza 0, 2, 4, 6 lb (wartości tarczy są do sprawdzenia na maszynie).
 - **Liczenie powtórzeń i serii.** Dotykasz dużego koła przy każdym powtórzeniu. „Zakończ serię” zapisuje serię z datą, liczbą powtórzeń i ustawieniami, z którymi była zrobiona.
 - **Czas odpoczynku.** Po zakończeniu serii koło odmierza odpoczynek. Po upływie wybranego celu (0:45–3:00) koło zmienia kolor, telefon wibruje (Android) i, jeśli włączony, gra krótki sygnał. Pierwsze dotknięcie w kolejnej serii kończy odpoczynek i zapisuje jego długość przy tej serii.
 - **Cardio.** Taśma ma stoper zamiast licznika powtórzeń, z ustawieniami prędkości i nachylenia.

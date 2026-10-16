@@ -10,14 +10,28 @@
 //   active:   the exercise in progress, or null,
 //   prefs:    { sound },
 // }
-// A field is one machine setting: { id, label, unit, step, value }.
-// Each saved set keeps a copy of the settings it was done with.
+// A field is one machine setting, of one of two kinds:
+//   number: { id, kind: 'number', label, unit, step, value }
+//   stack:  { id, kind: 'stack', label, value, dialPos, plates, dial }
+//           A selectorized weight stack. value is the index of the pinned
+//           plate (0 = top) or null; plates describes the kg and lb labels
+//           printed beside the plates; dial is the add-on weight knob
+//           ({ count, step, unit }, value = position * step) or null.
+// Each saved set keeps a copy of the settings it was done with
+// (see fieldSnapshot).
 
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 1;
+export const SCHEMA = 2;
 export const DEFAULT_REST = 90;
+export const LB_TO_KG = 0.45359237;
+
+// From a Cybex selector panel: 13 plates labelled 10–112 lb and 4.5–52.5 kg.
+export const DEFAULT_PLATES = { count: 13, kgFirst: 4.5, kgStep: 4, lbFirst: 10, lbStep: 8.5 };
+// The add-on weight knob. Cybex documents 0/5/10/15 lb for 20 lb plates; for
+// these ~8.5 lb plates 0/2/4/6 lb is an assumption to be checked on the machine.
+export const DEFAULT_DIAL = { count: 4, step: 2, unit: 'lb' };
 
 let seq = 0;
 export function newId(prefix) {
@@ -26,9 +40,20 @@ export function newId(prefix) {
 }
 
 function field(label, unit, step) {
-  return { id: newId('f'), label, unit, step, value: null };
+  return { id: newId('f'), kind: 'number', label, unit, step, value: null };
 }
-const weight = () => field('Ciężar', 'kg', 5);
+function stackField(label = 'Ciężar') {
+  return {
+    id: newId('f'),
+    kind: 'stack',
+    label,
+    value: null,
+    dialPos: 0,
+    plates: { ...DEFAULT_PLATES },
+    dial: { ...DEFAULT_DIAL },
+  };
+}
+const weight = () => stackField();
 const seat = () => field('Siedzisko', '', 1);
 
 function machine(name, type, fields) {
@@ -55,6 +80,57 @@ export function createState() {
 // ---------- persistence ----------
 
 const positive = (v) => (Number.isFinite(v) && v > 0 ? v : null);
+const nonNegative = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
+const intIn = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : null);
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
+function parsePlates(p = {}) {
+  return {
+    count: intIn(p.count, 1, 60) ?? DEFAULT_PLATES.count,
+    kgFirst: nonNegative(p.kgFirst) ?? DEFAULT_PLATES.kgFirst,
+    kgStep: positive(p.kgStep) ?? DEFAULT_PLATES.kgStep,
+    lbFirst: nonNegative(p.lbFirst) ?? DEFAULT_PLATES.lbFirst,
+    lbStep: positive(p.lbStep) ?? DEFAULT_PLATES.lbStep,
+  };
+}
+
+function parseDial(d) {
+  if (!d || typeof d !== 'object') return null;
+  const count = intIn(d.count, 2, 20);
+  if (count === null) return null;
+  return { count, step: positive(d.step) ?? DEFAULT_DIAL.step, unit: d.unit === 'kg' ? 'kg' : 'lb' };
+}
+
+function parseField(f, schema) {
+  const id = typeof f.id === 'string' ? f.id : newId('f');
+  // Version 1 had only number fields; its default "Ciężar [kg]" becomes a stack.
+  if (schema < 2 && f.kind === undefined && f.label === 'Ciężar' && f.unit === 'kg') {
+    const s = { ...stackField(f.label), id };
+    if (Number.isFinite(f.value)) s.value = nearestPlate(s, f.value);
+    return s;
+  }
+  if (f.kind === 'stack') {
+    const plates = parsePlates(f.plates);
+    const dial = parseDial(f.dial);
+    return {
+      id,
+      kind: 'stack',
+      label: f.label,
+      value: intIn(f.value, 0, plates.count - 1),
+      dialPos: dial ? (intIn(f.dialPos, 0, dial.count - 1) ?? 0) : 0,
+      plates,
+      dial,
+    };
+  }
+  return {
+    id,
+    kind: 'number',
+    label: f.label,
+    unit: typeof f.unit === 'string' ? f.unit : '',
+    step: positive(f.step) ?? 1,
+    value: Number.isFinite(f.value) ? f.value : null,
+  };
+}
 
 // Accepts a JSON string or an object. Returns a clean state, or null when the
 // input is not Myo data.
@@ -68,6 +144,7 @@ export function parseState(input) {
   if (!data || typeof data !== 'object' || !Array.isArray(data.machines) || !Array.isArray(data.sets)) {
     return null;
   }
+  const schema = Number.isInteger(data.schema) ? data.schema : 1;
   const machines = data.machines
     .filter((m) => m && typeof m.id === 'string' && typeof m.name === 'string')
     .map((m) => ({
@@ -77,13 +154,7 @@ export function parseState(input) {
       restTarget: positive(m.restTarget) ?? DEFAULT_REST,
       fields: (Array.isArray(m.fields) ? m.fields : [])
         .filter((f) => f && typeof f.label === 'string')
-        .map((f) => ({
-          id: typeof f.id === 'string' ? f.id : newId('f'),
-          label: f.label,
-          unit: typeof f.unit === 'string' ? f.unit : '',
-          step: positive(f.step) ?? 1,
-          value: Number.isFinite(f.value) ? f.value : null,
-        })),
+        .map((f) => parseField(f, schema)),
     }));
   const sets = data.sets.filter(
     (s) => s && typeof s.id === 'string' && typeof s.machineId === 'string' && Number.isFinite(s.endedAt),
@@ -141,15 +212,75 @@ const round = (n) => Math.round(n * 1000) / 1000;
 export function setFieldValue(state, machineId, fieldId, input) {
   const f = getField(state, machineId, fieldId);
   const v = parseNumber(input);
-  if (!f || v === undefined) return false;
+  if (!f || f.kind === 'stack' || v === undefined) return false;
   f.value = v === null ? null : round(v);
   return true;
 }
 
 export function stepField(state, machineId, fieldId, direction) {
   const f = getField(state, machineId, fieldId);
-  if (!f) return;
+  if (!f || f.kind === 'stack') return;
   f.value = Math.max(0, round((f.value ?? 0) + direction * f.step));
+}
+
+// ---------- weight stacks ----------
+
+// The labels printed beside plate number `index` (0 = top plate).
+export function plateWeights(field, index) {
+  const p = field.plates;
+  return { kg: round(p.kgFirst + index * p.kgStep), lb: round(p.lbFirst + index * p.lbStep) };
+}
+
+export function dialValue(field, pos = field.dialPos) {
+  return field.dial ? round(pos * field.dial.step) : 0;
+}
+
+export function nearestPlate(field, kg) {
+  let best = 0;
+  for (let i = 1; i < field.plates.count; i++) {
+    if (Math.abs(plateWeights(field, i).kg - kg) < Math.abs(plateWeights(field, best).kg - kg)) best = i;
+  }
+  return best;
+}
+
+// The plate kg label plus the dial, in kg to one decimal. Labels on machines
+// are rounded, so this is approximate.
+export function stackTotalKg(field) {
+  if (field.value === null) return null;
+  const dial = dialValue(field);
+  const dialKg = field.dial?.unit === 'lb' ? dial * LB_TO_KG : dial;
+  return Math.round((plateWeights(field, field.value).kg + dialKg) * 10) / 10;
+}
+
+export function setStackPlate(state, machineId, fieldId, index) {
+  const f = getField(state, machineId, fieldId);
+  if (!f || f.kind !== 'stack' || !Number.isInteger(index)) return;
+  f.value = clamp(index, 0, f.plates.count - 1);
+}
+
+export function stepDial(state, machineId, fieldId, direction) {
+  const f = getField(state, machineId, fieldId);
+  if (!f || f.kind !== 'stack' || !f.dial) return;
+  f.dialPos = clamp(f.dialPos + direction, 0, f.dial.count - 1);
+}
+
+// What a saved set keeps of a setting. For a stack, value is the total in kg
+// and the rest records what was set on the machine.
+export function fieldSnapshot(f) {
+  if (f.kind !== 'stack') return { label: f.label, unit: f.unit, value: f.value };
+  if (f.value === null) return { label: f.label, kind: 'stack', unit: 'kg', value: null };
+  const w = plateWeights(f, f.value);
+  return {
+    label: f.label,
+    kind: 'stack',
+    unit: 'kg',
+    value: stackTotalKg(f),
+    plate: f.value + 1,
+    plateKg: w.kg,
+    plateLb: w.lb,
+    dial: dialValue(f),
+    dialUnit: f.dial?.unit ?? null,
+  };
 }
 
 export function setRestTarget(state, machineId, seconds, now) {
@@ -163,9 +294,31 @@ export function setRestTarget(state, machineId, seconds, now) {
   }
 }
 
+// A stack field from edit form strings, keeping what was set on the machine.
+function stackFromDraft(f, prev, label) {
+  const num = (v) => parseNumber(v) ?? undefined;
+  const plates = parsePlates({
+    count: num(f.plates?.count),
+    kgFirst: num(f.plates?.kgFirst),
+    kgStep: num(f.plates?.kgStep),
+    lbFirst: num(f.plates?.lbFirst),
+    lbStep: num(f.plates?.lbStep),
+  });
+  const dial = parseDial({ count: num(f.dial?.count), step: num(f.dial?.step), unit: f.dial?.unit });
+  const s = { id: prev?.id ?? newId('f'), kind: 'stack', label, value: null, dialPos: 0, plates, dial };
+  if (prev?.kind === 'stack') {
+    s.value = prev.value === null ? null : Math.min(prev.value, plates.count - 1);
+    s.dialPos = dial ? Math.min(prev.dialPos, dial.count - 1) : 0;
+  } else if (Number.isFinite(prev?.value)) {
+    s.value = nearestPlate(s, prev.value);
+  }
+  return s;
+}
+
 // Adds a machine or updates an existing one from an edit form draft:
-// { id | null, name, type, fields: [{ id | null, label, unit, step }] }.
-// Existing fields keep their current values.
+// { id | null, name, type, fields: [{ id | null, kind, label, unit, step,
+//   plates: { count, kgFirst, kgStep, lbFirst, lbStep }, dial: { count, step, unit } }] },
+// with numbers as typed (strings). Existing fields keep their current values.
 export function saveMachine(state, draft, now) {
   const name = String(draft.name || '').trim();
   if (!name) return null;
@@ -175,12 +328,15 @@ export function saveMachine(state, draft, now) {
     .filter((f) => String(f.label || '').trim())
     .map((f) => {
       const prev = existing?.fields.find((x) => x.id === f.id);
+      const label = String(f.label).trim();
+      if (f.kind === 'stack') return stackFromDraft(f, prev, label);
       return {
         id: prev?.id ?? newId('f'),
-        label: String(f.label).trim(),
+        kind: 'number',
+        label,
         unit: String(f.unit || '').trim(),
         step: positive(parseNumber(f.step)) ?? 1,
-        value: prev?.value ?? null,
+        value: prev?.kind === 'stack' ? stackTotalKg(prev) : (prev?.value ?? null),
       };
     });
   if (existing) {
@@ -242,7 +398,7 @@ export function stepBodyWeight(state, day, direction, step = 0.1) {
 // The first rep tap of a set ends the rest; its length is saved with the set.
 
 function snapshot(m) {
-  return m.fields.map((f) => ({ label: f.label, unit: f.unit, value: f.value }));
+  return m.fields.map(fieldSnapshot);
 }
 
 export function startExercise(state, machineId, now) {

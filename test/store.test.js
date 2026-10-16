@@ -34,7 +34,9 @@ test('default machines', () => {
 
 test('counts reps, saves sets and measures rest between them', () => {
   const { state, row } = fresh();
-  S.setFieldValue(state, row.id, row.fields[0].id, '40');
+  const [weight, seat] = row.fields;
+  S.setStackPlate(state, row.id, weight.id, 8); // 36,5 kg
+  S.setFieldValue(state, row.id, seat.id, '4');
   S.startExercise(state, row.id, sec(0));
   S.addRep(state, sec(1));
   S.addRep(state, sec(3));
@@ -43,19 +45,20 @@ test('counts reps, saves sets and measures rest between them', () => {
   assert.equal(first.reps, 3);
   assert.equal(first.startedAt, sec(1));
   assert.equal(first.restBeforeSec, null);
-  assert.deepEqual(first.settings[0], { label: 'Ciężar', unit: 'kg', value: 40 });
+  assert.equal(first.settings[0].value, 36.5);
+  assert.deepEqual(first.settings[1], { label: 'Siedzisko', unit: '', value: 4 });
   assert.equal(state.active.phase, 'rest');
   assert.equal(S.restElapsedSec(state.active, sec(36)), 30);
 
   // Settings changed during the rest apply to the next set only.
-  S.stepField(state, row.id, row.fields[0].id, 1);
+  S.stepField(state, row.id, seat.id, 1);
   S.addRep(state, sec(101));
   S.addRep(state, sec(103));
   const second = S.finishSet(state, sec(104));
   assert.equal(second.reps, 2);
   assert.equal(second.restBeforeSec, 95);
-  assert.equal(second.settings[0].value, 45);
-  assert.equal(first.settings[0].value, 40);
+  assert.equal(second.settings[1].value, 5);
+  assert.equal(first.settings[1].value, 4);
   assert.equal(state.sets.length, 2);
 });
 
@@ -125,8 +128,9 @@ test('switching machines saves the unfinished set', () => {
 });
 
 test('settings input accepts a comma and rejects junk', () => {
-  const { state, row } = fresh();
-  const f = row.fields[0];
+  const { state, tread } = fresh();
+  const row = tread;
+  const f = tread.fields[0];
   assert.equal(S.setFieldValue(state, row.id, f.id, '42,5'), true);
   assert.equal(f.value, 42.5);
   assert.equal(S.setFieldValue(state, row.id, f.id, 'abc'), false);
@@ -139,20 +143,20 @@ test('settings input accepts a comma and rejects junk', () => {
 
 test('editing a machine keeps setting values; deleting keeps history', () => {
   const { state, row } = fresh();
-  S.setFieldValue(state, row.id, row.fields[0].id, '50');
+  S.setFieldValue(state, row.id, row.fields[1].id, '5');
   S.saveMachine(state, {
     id: row.id,
     name: ' Wiosłowanie siedząc ',
     type: 'strength',
     fields: [
-      { id: row.fields[0].id, label: 'Ciężar', unit: 'kg', step: '2,5' },
-      { id: null, label: 'Oparcie', unit: '', step: '1' },
-      { id: null, label: '  ', unit: '', step: '1' },
+      { id: row.fields[1].id, kind: 'number', label: 'Siedzisko', unit: '', step: '0,5' },
+      { id: null, kind: 'number', label: 'Oparcie', unit: '', step: '1' },
+      { id: null, kind: 'number', label: '  ', unit: '', step: '1' },
     ],
   }, sec(0));
   assert.equal(row.name, 'Wiosłowanie siedząc');
   assert.deepEqual(row.fields.map((f) => [f.label, f.step, f.value]), [
-    ['Ciężar', 2.5, 50],
+    ['Siedzisko', 0.5, 5],
     ['Oparcie', 1, null],
   ]);
 
@@ -242,4 +246,103 @@ test('save, load and import', () => {
   const imported = S.parseState(JSON.stringify({ ...state, active: { machineId: 'gone' } }));
   assert.equal(imported.active, null);
   assert.equal(imported.sets.length, 1);
+});
+
+test('weight stack: labels, pin, dial and total', () => {
+  const { state, row } = fresh();
+  const f = row.fields[0];
+  assert.equal(f.kind, 'stack');
+  // The labels on the photographed Cybex panel.
+  const labels = Array.from({ length: f.plates.count }, (_, i) => S.plateWeights(f, i));
+  assert.deepEqual(labels.map((w) => w.lb), [10, 18.5, 27, 35.5, 44, 52.5, 61, 69.5, 78, 86.5, 95, 103.5, 112]);
+  assert.deepEqual(labels.map((w) => w.kg), [4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5, 32.5, 36.5, 40.5, 44.5, 48.5, 52.5]);
+
+  assert.equal(S.stackTotalKg(f), null);
+  assert.deepEqual(S.fieldSnapshot(f), { label: 'Ciężar', kind: 'stack', unit: 'kg', value: null });
+
+  S.setStackPlate(state, row.id, f.id, 5);
+  assert.equal(S.stackTotalKg(f), 24.5);
+  S.stepDial(state, row.id, f.id, 1);
+  assert.equal(S.dialValue(f), 2);
+  assert.equal(S.stackTotalKg(f), 25.4); // 24,5 kg + 2 lb
+  S.stepDial(state, row.id, f.id, 5);
+  assert.equal(f.dialPos, 3);
+  S.stepDial(state, row.id, f.id, -9);
+  assert.equal(f.dialPos, 0);
+  S.setStackPlate(state, row.id, f.id, 99);
+  assert.equal(f.value, 12);
+  // Number inputs do not apply to a stack.
+  assert.equal(S.setFieldValue(state, row.id, f.id, '40'), false);
+
+  S.setStackPlate(state, row.id, f.id, 2);
+  S.stepDial(state, row.id, f.id, 2);
+  assert.deepEqual(S.fieldSnapshot(f), {
+    label: 'Ciężar', kind: 'stack', unit: 'kg', value: 14.3,
+    plate: 3, plateKg: 12.5, plateLb: 27, dial: 4, dialUnit: 'lb',
+  });
+});
+
+test('weight stack settings from the edit form', () => {
+  const { state, row } = fresh();
+  const f = row.fields[0];
+  S.setStackPlate(state, row.id, f.id, 10);
+  S.stepDial(state, row.id, f.id, 3);
+  S.saveMachine(state, {
+    id: row.id,
+    name: row.name,
+    type: 'strength',
+    fields: [{
+      id: f.id, kind: 'stack', label: 'Ciężar',
+      plates: { count: '8', kgFirst: '5', kgStep: '5', lbFirst: '10', lbStep: '10' },
+      dial: { count: '2', step: '2,5', unit: 'kg' },
+    }],
+  }, sec(0));
+  const g = row.fields[0];
+  assert.deepEqual(g.plates, { count: 8, kgFirst: 5, kgStep: 5, lbFirst: 10, lbStep: 10 });
+  assert.deepEqual(g.dial, { count: 2, step: 2.5, unit: 'kg' });
+  assert.equal(g.value, 7); // clamped to the last plate
+  assert.equal(g.dialPos, 1);
+
+  // No dial, and bad numbers fall back to defaults.
+  S.saveMachine(state, {
+    id: row.id, name: row.name, type: 'strength',
+    fields: [{ id: g.id, kind: 'stack', label: 'Ciężar', plates: { count: 'x' }, dial: { count: '0' } }],
+  }, sec(0));
+  assert.equal(row.fields[0].plates.count, S.DEFAULT_PLATES.count);
+  assert.equal(row.fields[0].dial, null);
+  assert.equal(S.dialValue(row.fields[0]), 0);
+
+  // Switching a number setting to a stack picks the nearest plate, and back.
+  const m = S.saveMachine(state, { name: 'Prasa', type: 'strength', fields: [{ kind: 'number', label: 'Ciężar', unit: 'kg', step: '5' }] }, sec(0));
+  S.setFieldValue(state, m.id, m.fields[0].id, '30');
+  S.saveMachine(state, { id: m.id, name: 'Prasa', type: 'strength', fields: [{ id: m.fields[0].id, kind: 'stack', label: 'Ciężar' }] }, sec(0));
+  assert.equal(S.plateWeights(m.fields[0], m.fields[0].value).kg, 28.5);
+  S.saveMachine(state, { id: m.id, name: 'Prasa', type: 'strength', fields: [{ id: m.fields[0].id, kind: 'number', label: 'Ciężar', unit: 'kg', step: '5' }] }, sec(0));
+  assert.equal(m.fields[0].value, 28.5);
+});
+
+test('version 1 data: the default weight setting becomes a stack', () => {
+  const v1 = {
+    schema: 1,
+    machines: [{
+      id: 'm1', name: 'Wiosłowanie', type: 'strength', restTarget: 90,
+      fields: [
+        { id: 'f1', label: 'Ciężar', unit: 'kg', step: 5, value: 40 },
+        { id: 'f2', label: 'Siedzisko', unit: '', step: 1, value: 3 },
+      ],
+    }],
+    sets: [{ id: 's1', machineId: 'm1', machineName: 'Wiosłowanie', type: 'strength', endedAt: T0, reps: 10,
+      settings: [{ label: 'Ciężar', unit: 'kg', value: 40 }] }],
+    bodyWeights: [],
+  };
+  const state = S.parseState(JSON.stringify(v1));
+  const [weight, seat] = state.machines[0].fields;
+  assert.equal(weight.kind, 'stack');
+  assert.equal(weight.id, 'f1');
+  assert.equal(S.plateWeights(weight, weight.value).kg, 40.5);
+  assert.deepEqual(seat, { id: 'f2', kind: 'number', label: 'Siedzisko', unit: '', step: 1, value: 3 });
+  assert.deepEqual(state.sets[0].settings, [{ label: 'Ciężar', unit: 'kg', value: 40 }]);
+  assert.equal(state.schema, S.SCHEMA);
+  // Saved again and reloaded, it stays as it is.
+  assert.deepEqual(S.parseState(JSON.stringify(state)), state);
 });

@@ -142,7 +142,9 @@ function render({ preserveFocus = false } = {}) {
     preserveFocus && focused?.tagName === 'INPUT' && focused.id && app.contains(focused)
       ? { id: focused.id, value: focused.value, start: focused.selectionStart, end: focused.selectionEnd }
       : null;
+  const scrolls = new Map([...app.querySelectorAll('[data-scroll-key]')].map((el) => [el.dataset.scrollKey, el.scrollTop]));
   app.innerHTML = html;
+  placeStacks(scrolls, !preserveFocus);
   if (keep) {
     const el = document.getElementById(keep.id);
     if (el) {
@@ -258,7 +260,7 @@ function prevDay(day) {
 }
 
 function settingChips(fields) {
-  const filled = fields.filter((f) => f.value !== null);
+  const filled = fields.map(S.fieldSnapshot).filter((f) => f.value !== null);
   if (!filled.length) return '';
   return `<span class="chips">${filled.map((f) => `<span class="chip">${esc(formatField(f))}</span>`).join('')}</span>`;
 }
@@ -298,15 +300,86 @@ function settingsSection(m) {
   if (!m.fields.length) {
     return '<section class="settings"><p class="field-note">Ta maszyna nie ma ustawień. Dodasz je w edycji.</p></section>';
   }
-  const rows = m.fields
-    .map(
-      (f) => `<div class="field">
-        <label for="f-${esc(f.id)}">${esc(f.label)}${f.unit ? ` <span class="unit">${esc(f.unit)}</span>` : ''}</label>
-        ${stepper({ id: `f-${f.id}`, label: f.label, value: valueText(f.value), action: 'step', attrs: `data-field="${esc(f.id)}"` })}
-      </div>`,
-    )
-    .join('');
+  const rows = m.fields.map((f) => (f.kind === 'stack' ? stackSetting(f) : numberSetting(f))).join('');
   return `<section class="settings" aria-label="Ustawienia maszyny">${rows}</section>`;
+}
+
+function numberSetting(f) {
+  return `<div class="field">
+    <label for="f-${esc(f.id)}">${esc(f.label)}${f.unit ? ` <span class="unit">${esc(f.unit)}</span>` : ''}</label>
+    ${stepper({ id: `f-${f.id}`, label: f.label, value: valueText(f.value), action: 'step', attrs: `data-field="${esc(f.id)}"` })}
+  </div>`;
+}
+
+// The two curved arrows printed on the add-on weight knob.
+const KNOB_ARROWS = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <path d="M44 20 A32 32 0 0 0 22 50" />
+  <path d="M56 20 A32 32 0 0 1 78 50" />
+  <polygon points="14,47 30,47 22,60" />
+  <polygon points="70,47 86,47 78,60" />
+</svg>`;
+
+// A weight stack drawn like the selector panel on the machine: lb on the left,
+// kg on the right, a pin in the chosen plate, and the add-on weight dial.
+function stackSetting(f) {
+  const id = esc(f.id);
+  const snap = S.fieldSnapshot(f);
+  const total = snap.value === null ? '—' : `${formatNumber(snap.value)} kg`;
+  const detail =
+    snap.value === null
+      ? 'Dotknij płytki, w którą wkładasz bolec.'
+      : `Płytka ${snap.plate}: ${formatNumber(snap.plateKg)} kg / ${formatNumber(snap.plateLb)} lb${
+          snap.dial ? `, tarcza +${formatNumber(snap.dial)} ${snap.dialUnit}` : ''
+        }`;
+  const rows = Array.from({ length: f.plates.count }, (_, i) => {
+    const w = S.plateWeights(f, i);
+    const pinned = f.value === i;
+    const lifted = f.value !== null && i <= f.value;
+    return `<button class="stack-row${lifted ? ' is-lifted' : ''}" type="button" data-action="plate" data-field="${id}" data-i="${i}" aria-pressed="${pinned}" aria-label="${formatNumber(w.lb)} lb, ${formatNumber(w.kg)} kg">
+      <span class="stack-lb">${formatNumber(w.lb)}</span>
+      <span class="stack-hole${pinned ? ' is-pin' : ''}"></span>
+      <span class="stack-kg">${formatNumber(w.kg)}</span>
+    </button>`;
+  }).join('');
+  const last = f.dial ? f.dial.count - 1 : 0;
+  const dial = f.dial
+    ? `<div class="dial" role="group" aria-label="Tarcza">
+        <span class="dial-name">Tarcza</span>
+        <span class="dial-knob">${KNOB_ARROWS}<span class="dial-window">${formatNumber(S.dialValue(f))}</span></span>
+        <span class="dial-unit">${esc(f.dial.unit)}</span>
+        <span class="dial-buttons">
+          <button type="button" data-action="dial" data-field="${id}" data-dir="-1" aria-label="Tarcza: mniej"${f.dialPos <= 0 ? ' disabled' : ''}>−</button>
+          <button type="button" data-action="dial" data-field="${id}" data-dir="1" aria-label="Tarcza: więcej"${f.dialPos >= last ? ' disabled' : ''}>+</button>
+        </span>
+      </div>`
+    : '';
+  return `<div class="stack-field">
+    <div class="stack-head">
+      <span class="stack-label" id="lbl-${id}">${esc(f.label)}</span>
+      <span class="stack-total">${total}</span>
+    </div>
+    <p class="field-note">${esc(detail)}</p>
+    <div class="stack-body">
+      <div class="stack" role="group" aria-labelledby="lbl-${id}">
+        <div class="stack-cols" aria-hidden="true"><span>lb</span><span></span><span>kg</span></div>
+        <div class="stack-list" data-scroll-key="stack-${id}">${rows}</div>
+      </div>
+      ${dial}
+    </div>
+  </div>`;
+}
+
+// Keep each stack list where it was, then bring the pinned plate to the middle.
+function placeStacks(previous, center) {
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  for (const list of app.querySelectorAll('.stack-list')) {
+    const before = previous.get(list.dataset.scrollKey);
+    if (before !== undefined) list.scrollTop = before;
+    const pinned = list.querySelector('[aria-pressed="true"]');
+    if (!pinned || (before !== undefined && !center)) continue;
+    const top = pinned.offsetTop - (list.clientHeight - pinned.offsetHeight) / 2;
+    list.scrollTo({ top, behavior: before !== undefined && !reduce ? 'smooth' : 'auto' });
+  }
 }
 
 // The ring around the big button: rest progress, or full during a set.
@@ -529,31 +602,87 @@ function viewHistory() {
 
 // ---------- edit machine ----------
 
+// The edit form keeps every number as typed. Each setting carries both the
+// number and the stack options, so switching its kind keeps what was typed.
+function draftField(f = {}) {
+  const stack = f.kind === 'stack';
+  const p = f.plates ?? S.DEFAULT_PLATES;
+  const d = stack ? f.dial : S.DEFAULT_DIAL;
+  return {
+    id: f.id ?? null,
+    kind: stack ? 'stack' : 'number',
+    label: f.label ?? '',
+    unit: stack ? 'kg' : (f.unit ?? ''),
+    step: formatNumber(stack ? 5 : (f.step ?? 1)),
+    plates: {
+      count: String(p.count),
+      kgFirst: formatNumber(p.kgFirst),
+      kgStep: formatNumber(p.kgStep),
+      lbFirst: formatNumber(p.lbFirst),
+      lbStep: formatNumber(p.lbStep),
+    },
+    dial: d
+      ? { count: String(d.count), step: formatNumber(d.step), unit: d.unit }
+      : { count: '0', step: formatNumber(S.DEFAULT_DIAL.step), unit: S.DEFAULT_DIAL.unit },
+  };
+}
+
 function draftFor(machineId) {
   const m = machineId && S.getMachine(state, machineId);
-  if (m) {
-    return {
-      id: m.id,
-      name: m.name,
-      type: m.type,
-      fields: m.fields.map((f) => ({ id: f.id, label: f.label, unit: f.unit, step: formatNumber(f.step) })),
-    };
-  }
-  return { id: null, name: '', type: 'strength', fields: [{ id: null, label: 'Ciężar', unit: 'kg', step: '5' }] };
+  if (m) return { id: m.id, name: m.name, type: m.type, fields: m.fields.map(draftField) };
+  return { id: null, name: '', type: 'strength', fields: [draftField({ kind: 'stack', label: 'Ciężar' })] };
+}
+
+function draftFieldRow(f, i) {
+  const input = (prop, value, attrs = '') =>
+    `<input id="d-${prop.replace('.', '-')}-${i}" type="text" data-draft="${prop}" data-i="${i}" value="${esc(value)}" autocomplete="off" ${attrs}>`;
+  const num = (prop, value, label) => input(prop, value, `inputmode="decimal" aria-label="${label}"`);
+  const suffix = (html, unit) => `<span class="suffix">${html}<span aria-hidden="true">${unit}</span></span>`;
+  const option = (value, label, current) => `<option value="${value}"${current === value ? ' selected' : ''}>${label}</option>`;
+  const body =
+    f.kind === 'stack'
+      ? `<div class="draft-grid">
+          <label for="d-plates-count-${i}">Płytek</label>
+          ${input('plates.count', f.plates.count, 'inputmode="numeric"')}
+          <span></span>
+          <span>Pierwsza płytka</span>
+          ${suffix(num('plates.kgFirst', f.plates.kgFirst, 'Pierwsza płytka w kg'), 'kg')}
+          ${suffix(num('plates.lbFirst', f.plates.lbFirst, 'Pierwsza płytka w funtach'), 'lb')}
+          <span>Każda następna</span>
+          ${suffix(num('plates.kgStep', f.plates.kgStep, 'Każda następna płytka w kg'), '+kg')}
+          ${suffix(num('plates.lbStep', f.plates.lbStep, 'Każda następna płytka w funtach'), '+lb')}
+          <label for="d-dial-count-${i}">Tarcza: pozycji</label>
+          ${input('dial.count', f.dial.count, 'inputmode="numeric"')}
+          <span class="draft-hint">0 = bez tarczy</span>
+          <label for="d-dial-step-${i}">Tarcza: co</label>
+          ${input('dial.step', f.dial.step, 'inputmode="decimal"')}
+          <select id="d-dial-unit-${i}" data-draft="dial.unit" data-i="${i}" aria-label="Jednostka tarczy">
+            ${option('lb', 'lb', f.dial.unit)}${option('kg', 'kg', f.dial.unit)}
+          </select>
+        </div>`
+      : `<div class="draft-grid">
+          <label for="d-unit-${i}">Jednostka</label>
+          ${input('unit', f.unit, 'placeholder="—"')}
+          <span></span>
+          <label for="d-step-${i}">Krok − i +</label>
+          ${input('step', f.step, 'inputmode="decimal"')}
+          <span></span>
+        </div>`;
+  return `<div class="draft-field">
+    <div class="draft-main">
+      ${input('label', f.label, 'placeholder="np. Oparcie" aria-label="Nazwa ustawienia"')}
+      <select id="d-kind-${i}" data-draft="kind" data-i="${i}" aria-label="Rodzaj ustawienia">
+        ${option('number', 'Liczba', f.kind)}${option('stack', 'Stos ciężarków', f.kind)}
+      </select>
+      <button class="icon-btn" type="button" data-action="draft-remove" data-i="${i}" aria-label="Usuń ustawienie ${esc(f.label)}"><span aria-hidden="true">×</span></button>
+    </div>
+    ${body}
+  </div>`;
 }
 
 function viewEdit() {
   const d = ui.draft;
-  const rows = d.fields
-    .map(
-      (f, i) => `<div class="draft-field">
-        <input id="d-label-${i}" type="text" data-draft="label" data-i="${i}" value="${esc(f.label)}" placeholder="np. Oparcie" aria-label="Nazwa ustawienia">
-        <input id="d-unit-${i}" type="text" data-draft="unit" data-i="${i}" value="${esc(f.unit)}" placeholder="—" aria-label="Jednostka">
-        <input id="d-step-${i}" type="text" inputmode="decimal" data-draft="step" data-i="${i}" value="${esc(f.step)}" aria-label="Krok przycisków − i +">
-        <button class="icon-btn" type="button" data-action="draft-remove" data-i="${i}" aria-label="Usuń ustawienie ${esc(f.label)}"><span aria-hidden="true">×</span></button>
-      </div>`,
-    )
-    .join('');
+  const rows = d.fields.map(draftFieldRow).join('');
   const confirming = ui.confirm === `machine:${d.id}`;
   const del = d.id
     ? `<section class="danger-zone">
@@ -577,8 +706,7 @@ function viewEdit() {
       </fieldset>
       <fieldset class="form-row">
         <legend>Ustawienia</legend>
-        <p class="field-note">Na przykład ciężar, wysokość siedziska, pozycja oparcia. Krok to zmiana po dotknięciu − albo +.</p>
-        ${d.fields.length ? '<div class="draft-head" aria-hidden="true"><span>Nazwa</span><span>Jedn.</span><span>Krok</span><span></span></div>' : ''}
+        <p class="field-note">Na przykład ciężar, wysokość siedziska, pozycja oparcia. „Stos ciężarków” to płytki z bolcem i tarczą do małych dodatków, opisane tak jak na maszynie.</p>
         ${rows}
         <button class="btn" type="button" data-action="draft-add">Dodaj ustawienie</button>
       </fieldset>
@@ -791,6 +919,12 @@ app.addEventListener('click', (e) => {
     case 'bw-step':
       S.stepBodyWeight(state, today(), Number(el.dataset.dir));
       break;
+    case 'plate':
+      S.setStackPlate(state, machineId, el.dataset.field, Number(el.dataset.i));
+      break;
+    case 'dial':
+      S.stepDial(state, machineId, el.dataset.field, Number(el.dataset.dir));
+      break;
     case 'cardio-toggle':
       S.startExercise(state, machineId, now);
       S.toggleCardio(state, now);
@@ -820,7 +954,7 @@ app.addEventListener('click', (e) => {
       render();
       return;
     case 'draft-add':
-      ui.draft.fields.push({ id: null, label: '', unit: '', step: '1' });
+      ui.draft.fields.push(draftField());
       render();
       document.getElementById(`d-label-${ui.draft.fields.length - 1}`)?.focus();
       return;
@@ -862,6 +996,10 @@ app.addEventListener('change', (e) => {
     persist();
   } else if (t.name === 'type' && ui.draft) {
     ui.draft.type = t.value;
+  } else if (t.dataset.draft === 'kind' && ui.draft) {
+    ui.draft.fields[Number(t.dataset.i)].kind = t.value;
+    render();
+    document.getElementById(t.id)?.focus();
   } else if (t.id === 'import-file' && t.files?.[0]) {
     readImport(t.files[0]);
   }
@@ -871,8 +1009,14 @@ app.addEventListener('input', (e) => {
   const t = e.target;
   const prop = t.dataset.draft;
   if (!prop || !ui.draft) return;
-  if (prop === 'name') ui.draft.name = t.value;
-  else ui.draft.fields[Number(t.dataset.i)][prop] = t.value;
+  if (prop === 'name') {
+    ui.draft.name = t.value;
+    return;
+  }
+  const f = ui.draft.fields[Number(t.dataset.i)];
+  const [group, key] = prop.split('.');
+  if (key) f[group][key] = t.value;
+  else f[group] = t.value;
 });
 
 // Enter closes the phone keyboard and saves the value.

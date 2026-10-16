@@ -26,7 +26,12 @@ export function formatNumber(value) {
 }
 
 // "40 kg" when the setting has a unit, "Siedzisko 4" when it does not.
+// A weight stack shows what is set on the machine: "24,5 kg + 2 lb".
 export function formatField(field) {
+  if (field.kind === 'stack') {
+    const plate = `${formatNumber(field.plateKg)} kg`;
+    return field.dial ? `${plate} + ${formatNumber(field.dial)} ${field.dialUnit}` : plate;
+  }
   const v = formatNumber(field.value);
   return field.unit ? `${v} ${field.unit}` : `${field.label} ${v}`;
 }

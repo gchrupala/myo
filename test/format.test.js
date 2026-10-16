@@ -39,6 +39,10 @@ test('formatSettings skips empty values and labels unitless ones', () => {
   ];
   assert.equal(formatSettings(settings), '42,5 kg · Siedzisko 4');
   assert.equal(formatSettings([]), '');
+  const stack = { label: 'Ciężar', kind: 'stack', unit: 'kg', value: 25.4, plateKg: 24.5, plateLb: 52.5, dial: 2, dialUnit: 'lb' };
+  assert.equal(formatSettings([stack]), '24,5 kg + 2 lb');
+  assert.equal(formatSettings([{ ...stack, dial: 0 }]), '24,5 kg');
+  assert.equal(formatSettings([{ label: 'Ciężar', kind: 'stack', unit: 'kg', value: null }]), '');
 });
 
 test('dayKey and formatDay use the local calendar', () => {
