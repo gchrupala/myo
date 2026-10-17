@@ -206,16 +206,16 @@ test('new machine needs a name', () => {
 
 test('body weight: one entry per day, steps from the last known value', () => {
   const { state } = fresh();
-  assert.equal(S.setBodyWeight(state, '2026-10-14', '82,4'), true);
-  assert.equal(S.setBodyWeight(state, '2026-10-16', 'x'), false);
-  assert.equal(S.setBodyWeight(state, '2026-10-16', '-1'), false);
+  assert.equal(S.setBodyWeight(state, '2026-10-14', '82,4', sec(0)), true);
+  assert.equal(S.setBodyWeight(state, '2026-10-16', 'x', sec(0)), false);
+  assert.equal(S.setBodyWeight(state, '2026-10-16', '-1', sec(0)), false);
   assert.equal(S.bodyWeightOn(state, '2026-10-16'), null);
   assert.equal(S.latestBodyWeight(state, '2026-10-16').kg, 82.4);
-  S.stepBodyWeight(state, '2026-10-16', -1);
+  S.stepBodyWeight(state, '2026-10-16', -1, sec(1));
   assert.equal(S.bodyWeightOn(state, '2026-10-16'), 82.3);
-  S.setBodyWeight(state, '2026-10-16', '82');
+  S.setBodyWeight(state, '2026-10-16', '82', sec(2));
   assert.equal(state.bodyWeights.length, 2);
-  S.setBodyWeight(state, '2026-10-16', '');
+  S.setBodyWeight(state, '2026-10-16', '', sec(3));
   assert.equal(S.bodyWeightOn(state, '2026-10-16'), null);
 });
 
@@ -230,7 +230,7 @@ test('history groups by day and machine, newest day first', () => {
   S.startExercise(state, tread.id, sec(100));
   S.toggleCardio(state, sec(100));
   S.finishCardio(state, sec(700));
-  S.setBodyWeight(state, '2026-10-15', '82');
+  S.setBodyWeight(state, '2026-10-15', '82', sec(0));
 
   const days = S.historyByDay(state);
   assert.deepEqual(days.map((d) => d.day), ['2026-10-16', '2026-10-15', '2026-10-14']);
@@ -250,7 +250,7 @@ test('save, load and import', () => {
   const { state, row } = fresh();
   S.setReps(state, row.id, '8');
   S.saveSet(state, row.id, sec(2));
-  S.setBodyWeight(state, '2026-10-16', '80');
+  S.setBodyWeight(state, '2026-10-16', '80', sec(3));
 
   const mem = new Map();
   const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };

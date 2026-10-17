@@ -82,6 +82,12 @@ export function setHeadline(set) {
   return { main: `${formatNumber(kcal.value)} kcal`, meta: [time, rest].filter(Boolean).join(' · ') };
 }
 
+// "dzisiaj, 12:34" / "today, 12:34" / "wt. 13.10, 08:05".
+export function formatWhen(ts, now = Date.now()) {
+  const time = new Date(ts).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+  return `${formatDay(dayKey(ts), now, true)}, ${time}`;
+}
+
 // One-line summary of a session on one machine.
 export function summarizeSets(sets) {
   const strength = sets.filter((s) => s.type !== 'cardio');

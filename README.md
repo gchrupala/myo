@@ -28,7 +28,21 @@ Ekran nie gaśnie, dopóki otwarty jest ekran ćwiczenia (jeśli przeglądarka n
 
 ## Gdzie są dane
 
-Wszystko jest zapisane tylko w przeglądarce na telefonie (`localStorage`). Nie ma serwera ani konta. W zakładce Historia są przyciski „Pobierz kopię” i „Wczytaj kopię” (plik JSON), żeby przenieść dane na inny telefon albo zabezpieczyć je przed wyczyszczeniem danych przeglądarki.
+Dane są zapisane w przeglądarce na telefonie (`localStorage`). Nie ma serwera ani konta. W zakładce Historia są przyciski „Pobierz kopię” i „Wczytaj kopię” (plik JSON).
+
+### Synchronizacja z GitHubem
+
+W ustawieniach (koło zębate) można połączyć aplikację z prywatnym repozytorium na GitHubie. Dane trafiają wtedy do pliku `myo.json` w tym repozytorium i stamtąd na inne urządzenia połączone z tym samym repozytorium. Każda synchronizacja to commit, więc zostaje historia zmian.
+
+1. Załóż prywatne repozytorium, np. `myo-data`. Publicznego aplikacja nie przyjmie, bo dane zawierają m.in. wagę ciała.
+2. Utwórz token na [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new): „Repository access” → „Only select repositories” → to repozytorium; „Permissions” → „Contents” → „Read and write”. Ważność tokena ustawiasz sam (np. rok); po wygaśnięciu aplikacja pokaże komunikat.
+3. W aplikacji: Ustawienia → Synchronizacja z GitHubem → wpisz `właściciel/nazwa` repozytorium i token → „Połącz”.
+
+Kiedy aplikacja synchronizuje: po otwarciu, po powrocie do niej, kilkanaście sekund po każdej zmianie, po odzyskaniu internetu i na żądanie („Synchronizuj teraz”). Bez internetu zmiany czekają.
+
+Jak łączy dane z kilku urządzeń: serie z obu urządzeń zostają (usunięte serie zostają usunięte), przy maszynach wygrywa wersja zmieniona później, przy wadze ciała wygrywa nowszy wpis z danego dnia. Urządzenie łączone po raz pierwszy z repozytorium, w którym są już dane, przejmuje stamtąd maszyny zamiast swoich domyślnych. Język, dźwięk i trwające ćwiczenie zostają na każdym urządzeniu osobno.
+
+Token jest zapisany tylko w przeglądarce tego urządzenia, osobno od danych: nie trafia do repozytorium ani do kopii danych. „Odłącz” go usuwa.
 
 ## Uruchomienie z tego repozytorium (GitHub Pages)
 
@@ -64,11 +78,12 @@ Bez zależności i bez kroku budowania.
 | `js/format.js` | formatowanie czasu, liczb, dat i podsumowań w bieżącym języku |
 | `js/i18n.js` | teksty interfejsu (pl, en, es) i tłumaczenia domyślnych nazw |
 | `js/app.js` | widoki i obsługa dotknięć |
+| `js/sync.js` | synchronizacja z plikiem w repozytorium GitHub (API, łączenie zmian) |
 | `sw.js` | praca bez internetu (service worker) |
-| `test/` | testy `node --test` dla `store.js`, `format.js` i `i18n.js` |
+| `test/` | testy `node --test` dla `store.js`, `format.js`, `i18n.js` i `sync.js` |
 
 ## Ograniczenia
 
 - Na iPhonie nie ma wibracji, a sygnał dźwiękowy może nie zagrać przy włączonym trybie cichym.
 - Sygnał końca odpoczynku działa, gdy aplikacja jest na ekranie. Przy zablokowanym telefonie przeglądarka wstrzymuje liczniki; czas jest liczony poprawnie, ale sygnał nie zagra.
-- Dane nie synchronizują się między urządzeniami.
+- Synchronizacja działa tylko w wersji z GitHub Pages; w podglądzie na claude.ai przeglądarka blokuje połączenia z GitHubem.

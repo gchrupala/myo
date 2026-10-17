@@ -7,11 +7,13 @@ import {
   formatDuration,
   formatField,
   formatNumber,
+  formatWhen,
   restClock,
   setHeadline,
   summarizeSets,
 } from './format.js';
 import { LANGUAGES, language, nameFor, resolveLanguage, setLanguage, t } from './i18n.js';
+import { gitHubRemote, parseRepo, syncOnce } from './sync.js';
 
 const REST_PRESETS = [45, 60, 90, 120, 180];
 
@@ -46,8 +48,115 @@ function openStorage() {
   }
 }
 
+// Fingerprints of the machines as last saved, to stamp the ones that change
+// (their updatedAt decides which version wins when devices sync).
+let fingerprints = S.machineFingerprints(state);
+
 function persist() {
+  fingerprints = S.stampMachines(state, fingerprints, Date.now());
   if (!S.saveState(storage, state)) saveFailed = true;
+  scheduleSync();
+}
+
+// ---------- sync with GitHub ----------
+//
+// The connection (repository and token) is kept on this device only, under
+// its own key, so it never goes into a backup file or into the shared data.
+
+const SYNC_KEY = 'myo:sync';
+const SYNC_DELAY = 15000; // after a change, wait for more before pushing
+let syncConfig = loadSyncConfig();
+const sync = { busy: false, again: false, timer: 0 };
+
+function loadSyncConfig() {
+  try {
+    const c = JSON.parse(storage?.getItem(SYNC_KEY) ?? 'null');
+    return c?.repo && c?.token ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSyncConfig() {
+  try {
+    if (syncConfig) storage?.setItem(SYNC_KEY, JSON.stringify(syncConfig));
+    else storage?.removeItem(SYNC_KEY);
+  } catch {
+    // Without storage the connection lasts until the page closes.
+  }
+}
+
+function scheduleSync(delay = SYNC_DELAY) {
+  if (!syncConfig) return;
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(syncNow, delay);
+}
+
+async function syncNow() {
+  const config = syncConfig;
+  if (!config) return;
+  if (sync.busy) {
+    sync.again = true;
+    return;
+  }
+  clearTimeout(sync.timer);
+  sync.timer = 0;
+  sync.busy = true;
+  if (current().view === 'settings') render({ preserveFocus: true });
+  let result = { error: null };
+  try {
+    await syncOnce({
+      remote: gitHubRemote(config),
+      getLocal: () => S.syncDoc(state),
+      apply: (doc) => {
+        state = S.applyDoc(state, doc);
+        fingerprints = S.machineFingerprints(state);
+        if (!S.saveState(storage, state)) saveFailed = true;
+      },
+      firstSync: !config.synced,
+      now: Date.now(),
+    });
+    result = { synced: true, lastSyncAt: Date.now(), error: null };
+  } catch (e) {
+    // Being offline is not shown as an error; the next change, a return to
+    // the app or getting back online tries again.
+    result = e?.kind === 'network' ? {} : { error: e?.kind ?? 'bad' };
+  } finally {
+    sync.busy = false;
+    if (syncConfig === config) {
+      syncConfig = { ...config, ...result };
+      saveSyncConfig();
+    }
+    render({ preserveFocus: true });
+    if (sync.again) {
+      sync.again = false;
+      scheduleSync(1000);
+    }
+  }
+}
+
+async function connectSync(repoInput, tokenInput) {
+  const repo = parseRepo(repoInput);
+  const token = String(tokenInput ?? '').trim();
+  Object.assign(ui, { syncRepo: repoInput, syncToken: token, syncError: null });
+  if (!repo) ui.syncError = 'repoFormat';
+  else if (!token) ui.syncError = 'token';
+  if (ui.syncError) {
+    render();
+    return;
+  }
+  ui.syncConnecting = true;
+  render();
+  try {
+    await gitHubRemote({ repo, token }).checkRepo();
+    syncConfig = { repo, token, synced: false, lastSyncAt: null, error: null };
+    saveSyncConfig();
+    Object.assign(ui, { syncRepo: null, syncToken: null, syncConnecting: false });
+    await syncNow();
+  } catch (e) {
+    Object.assign(ui, { syncError: e?.kind ?? 'bad', syncConnecting: false });
+    render();
+  }
 }
 
 function applyLanguage() {
@@ -190,9 +299,7 @@ function subBar(title, extra = '') {
 }
 
 function storageNotice() {
-  return saveFailed
-    ? `<p class="notice">${t('storage.notice')}</p>`
-    : '';
+  return `${saveFailed ? `<p class="notice">${t('storage.notice')}</p>` : ''}${syncNotice()}`;
 }
 
 // Shows the exercise in progress on every other screen.
@@ -766,7 +873,58 @@ function viewSettings() {
       ${Object.entries(LANGUAGES).map(([code, name]) => option(code, name, code)).join('')}
     </fieldset>
     <p class="field-note">${t('settings.languageNote')}</p>
+    ${syncSection()}
   </main>`;
+}
+
+function syncSection() {
+  const c = syncConfig;
+  const error = c ? c.error : ui.syncError;
+  const errorHtml = error ? `<p class="error" role="alert">${t(`sync.err.${error}`)}</p>` : '';
+  const head = `<h2 class="section-title" id="sync-label">${t('sync.title')}</h2>`;
+  if (c) {
+    const status = sync.busy ? t('sync.busy') : c.lastSyncAt ? t('sync.last', { when: formatWhen(c.lastSyncAt) }) : t('sync.never');
+    const confirming = ui.confirm === 'sync-off';
+    return `<section class="sync" aria-labelledby="sync-label">
+      ${head}
+      <p>${esc(t('sync.connected', { repo: c.repo }))}</p>
+      <p class="field-note">${esc(status)}</p>
+      ${errorHtml}
+      <div class="controls">
+        <button class="btn" type="button" data-action="sync-now"${sync.busy ? ' disabled' : ''}>${t('sync.now')}</button>
+        <button class="btn${confirming ? ' danger' : ''}" type="button" data-action="sync-off">${t(confirming ? 'sync.disconnectConfirm' : 'sync.disconnect')}</button>
+      </div>
+      <p class="field-note">${t('sync.disconnectNote')}</p>
+    </section>`;
+  }
+  return `<section class="sync" aria-labelledby="sync-label">
+    ${head}
+    <p class="field-note">${t('sync.intro')}</p>
+    <ol class="steps">
+      <li>${t('sync.step1')}</li>
+      <li>${t('sync.step2')} <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a></li>
+      <li>${t('sync.step3')}</li>
+    </ol>
+    <form id="sync-form" class="edit sync-form" novalidate>
+      <div class="form-row">
+        <label for="sync-repo">${t('sync.repo')}</label>
+        <input id="sync-repo" type="text" placeholder="gchrupala/myo-data" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(ui.syncRepo ?? '')}">
+      </div>
+      <div class="form-row">
+        <label for="sync-token">${t('sync.token')}</label>
+        <input id="sync-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(ui.syncToken ?? '')}">
+      </div>
+      ${errorHtml}
+      <button class="btn primary wide" type="submit"${ui.syncConnecting ? ' disabled' : ''}>${t(ui.syncConnecting ? 'sync.connecting' : 'sync.connect')}</button>
+    </form>
+  </section>`;
+}
+
+// On the main screens when sync stopped working (not when merely offline).
+function syncNotice() {
+  return syncConfig?.error
+    ? `<button class="notice notice-link" type="button" data-action="settings">${t('sync.homeError')}</button>`
+    : '';
 }
 
 // ---------- live timers, signal, screen ----------
@@ -952,7 +1110,7 @@ app.addEventListener('click', (e) => {
       S.stepField(state, machineId, el.dataset.field, Number(el.dataset.dir));
       break;
     case 'bw-step':
-      S.stepBodyWeight(state, today(), Number(el.dataset.dir));
+      S.stepBodyWeight(state, today(), Number(el.dataset.dir), now);
       break;
     case 'plate':
       S.setStackPlate(state, machineId, el.dataset.field, Number(el.dataset.i));
@@ -973,7 +1131,7 @@ app.addEventListener('click', (e) => {
       return;
     case 'del-set':
       if (ui.confirm === `set:${el.dataset.id}`) {
-        S.deleteSet(state, el.dataset.id);
+        S.deleteSet(state, el.dataset.id, now);
         ui.confirm = null;
       } else {
         armConfirm(`set:${el.dataset.id}`);
@@ -985,8 +1143,22 @@ app.addEventListener('click', (e) => {
     case 'import-confirm':
       state = ui.importCandidate;
       ui.importCandidate = null;
+      fingerprints = S.machineFingerprints(state);
       applyLanguage();
       break;
+    case 'sync-now':
+      syncNow();
+      return;
+    case 'sync-off':
+      if (ui.confirm === 'sync-off') {
+        syncConfig = null;
+        saveSyncConfig();
+        ui.confirm = null;
+      } else {
+        armConfirm('sync-off');
+      }
+      render();
+      return;
     case 'import-cancel':
       ui.importCandidate = null;
       render();
@@ -1031,7 +1203,7 @@ app.addEventListener('change', (e) => {
     persist();
     t.value = String(S.repsFor(state, machineId));
   } else if (t.dataset.bw) {
-    S.setBodyWeight(state, today(), t.value);
+    S.setBodyWeight(state, today(), t.value, Date.now());
     persist();
     render();
   } else if (t.id === 'sound') {
@@ -1093,14 +1265,26 @@ app.addEventListener('keydown', (e) => {
 app.addEventListener('submit', (e) => {
   e.preventDefault();
   if (e.target.id === 'edit-form') saveDraft();
+  if (e.target.id === 'sync-form') {
+    connectSync(document.getElementById('sync-repo')?.value, document.getElementById('sync-token')?.value);
+  }
 });
 
 document.addEventListener('visibilitychange', () => {
   updateWakeLock();
   renderLive();
-  // An installed app can stay open for days; look for a new version on return.
-  if (document.visibilityState === 'visible') swRegistration?.update().catch(() => {});
+  if (document.visibilityState === 'visible') {
+    // An installed app can stay open for days; look for a new version and
+    // for data from other devices on return.
+    swRegistration?.update().catch(() => {});
+    if (syncConfig && Date.now() - (syncConfig.lastSyncAt ?? 0) > 60000) syncNow();
+  } else if (sync.timer) {
+    // Leaving the app: push pending changes now rather than never.
+    syncNow();
+  }
 });
+
+window.addEventListener('online', () => syncNow());
 
 // ---------- start ----------
 
@@ -1116,6 +1300,7 @@ applyLanguage();
 if (state.active && S.getMachine(state, state.active.machineId)) go('exercise', state.active.machineId);
 else render();
 setInterval(renderLive, 250);
+syncNow();
 
 // Offline support and updates. When a new version of sw.js takes over, reload
 // once so the new files are used at once instead of on the next launch.

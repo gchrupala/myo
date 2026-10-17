@@ -3,12 +3,15 @@
 // browser.
 //
 // state = {
-//   machines: [{ id, name, type: 'strength' | 'cardio', restTarget, fields }],
+//   machines: [{ id, name, type: 'strength' | 'cardio', restTarget, reps,
+//                fields, updatedAt }],
 //   sets:     [{ id, machineId, machineName, type, startedAt, endedAt,
 //                reps, durationSec, restBeforeSec, settings }],
-//   bodyWeights: [{ day: 'YYYY-MM-DD', kg }], at most one per day,
-//   active:   the exercise in progress, or null,
-//   prefs:    { sound, lang: 'system' | 'pl' | 'en' | 'es' },
+//   bodyWeights: [{ day: 'YYYY-MM-DD', kg, at }], at most one per day,
+//   tombstones: { [id]: deletedAt }, deleted sets and machines and
+//                ('bw:' + day) body weights, so deletions reach other devices,
+//   active:   the exercise in progress, or null (this device only),
+//   prefs:    { sound, lang: 'system' | 'pl' | 'en' | 'es' } (this device only),
 // }
 // A field is one machine setting, of one of two kinds:
 //   number: { id, kind: 'number', label, unit, step, value }
@@ -25,7 +28,7 @@
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 9;
+export const SCHEMA = 10;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
@@ -61,7 +64,7 @@ const energy = () => field('Energia', 'kcal', 10);
 const seat = () => field('Siedzisko', '', 1);
 
 function machine(name, type, fields) {
-  return { id: newId('m'), name, type, restTarget: DEFAULT_REST, reps: null, fields };
+  return { id: newId('m'), name, type, restTarget: DEFAULT_REST, reps: null, fields, updatedAt: 0 };
 }
 
 // Stacks differ between machines. Cybex Eagle NX: a 10 lb top plate, then
@@ -107,7 +110,15 @@ export function defaultMachines() {
 }
 
 export function createState() {
-  return { schema: SCHEMA, machines: defaultMachines(), sets: [], bodyWeights: [], active: null, prefs: { sound: true, lang: 'system' } };
+  return {
+    schema: SCHEMA,
+    machines: defaultMachines(),
+    sets: [],
+    bodyWeights: [],
+    tombstones: {},
+    active: null,
+    prefs: { sound: true, lang: 'system' },
+  };
 }
 
 // ---------- persistence ----------
@@ -194,6 +205,7 @@ export function parseState(input) {
       type: m.type === 'cardio' ? 'cardio' : 'strength',
       restTarget: positive(m.restTarget) ?? DEFAULT_REST,
       reps: intIn(m.reps, 1, 999),
+      updatedAt: Number.isFinite(m.updatedAt) ? m.updatedAt : 0,
       fields: (Array.isArray(m.fields) ? m.fields : [])
         .filter((f) => f && typeof f.label === 'string')
         .map((f) => parseField(f, schema)),
@@ -201,9 +213,15 @@ export function parseState(input) {
   const sets = data.sets.filter(
     (s) => s && typeof s.id === 'string' && typeof s.machineId === 'string' && Number.isFinite(s.endedAt),
   );
-  const bodyWeights = (Array.isArray(data.bodyWeights) ? data.bodyWeights : []).filter(
-    (w) => w && /^\d{4}-\d{2}-\d{2}$/.test(w.day) && positive(w.kg),
-  );
+  const bodyWeights = (Array.isArray(data.bodyWeights) ? data.bodyWeights : [])
+    .filter((w) => w && /^\d{4}-\d{2}-\d{2}$/.test(w.day) && positive(w.kg))
+    .map((w) => ({ day: w.day, kg: w.kg, at: Number.isFinite(w.at) ? w.at : 0 }));
+  const tombstones = {};
+  if (data.tombstones && typeof data.tombstones === 'object') {
+    for (const key of Object.keys(data.tombstones).sort()) {
+      if (Number.isFinite(data.tombstones[key])) tombstones[key] = data.tombstones[key];
+    }
+  }
   // Version 3 had no energy setting on the treadmill.
   if (schema < 4) {
     for (const m of machines) {
@@ -242,7 +260,15 @@ export function parseState(input) {
     };
   }
   const lang = ['system', 'pl', 'en', 'es'].includes(data.prefs?.lang) ? data.prefs.lang : 'system';
-  return { schema: SCHEMA, machines, sets, bodyWeights, active, prefs: { sound: data.prefs?.sound !== false, lang } };
+  return {
+    schema: SCHEMA,
+    machines,
+    sets,
+    bodyWeights,
+    tombstones,
+    active,
+    prefs: { sound: data.prefs?.sound !== false, lang },
+  };
 }
 
 export function loadState(storage) {
@@ -472,7 +498,7 @@ export function saveMachine(state, draft, now) {
     Object.assign(existing, { name, type, fields });
     return existing;
   }
-  const m = { id: newId('m'), name, type, restTarget: DEFAULT_REST, reps: null, fields };
+  const m = { id: newId('m'), name, type, restTarget: DEFAULT_REST, reps: null, fields, updatedAt: 0 };
   state.machines.push(m);
   return m;
 }
@@ -481,21 +507,24 @@ export function saveMachine(state, draft, now) {
 export function deleteMachine(state, machineId, now) {
   if (state.active?.machineId === machineId) endExercise(state, now);
   state.machines = state.machines.filter((m) => m.id !== machineId);
+  state.tombstones[machineId] = now;
 }
 
-export function deleteSet(state, setId) {
+export function deleteSet(state, setId, now) {
   state.sets = state.sets.filter((s) => s.id !== setId);
+  state.tombstones[setId] = now;
 }
 
 // ---------- body weight ----------
 
 // An empty input removes the entry for that day. Returns false when the
 // input is not a positive number.
-export function setBodyWeight(state, day, input) {
+export function setBodyWeight(state, day, input, now) {
   const kg = parseNumber(input);
   if (kg === undefined || (kg !== null && kg <= 0)) return false;
   state.bodyWeights = state.bodyWeights.filter((w) => w.day !== day);
-  if (kg !== null) state.bodyWeights.push({ day, kg: round(kg) });
+  if (kg !== null) state.bodyWeights.push({ day, kg: round(kg), at: now });
+  else state.tombstones[`bw:${day}`] = now;
   return true;
 }
 
@@ -513,10 +542,10 @@ export function latestBodyWeight(state, day) {
 }
 
 // Steps from today's entry, or from the latest earlier one.
-export function stepBodyWeight(state, day, direction, step = 0.1) {
+export function stepBodyWeight(state, day, direction, now, step = 0.1) {
   const base = latestBodyWeight(state, day)?.kg;
   if (base === undefined) return;
-  setBodyWeight(state, day, String(Math.max(step, round(base + direction * step))));
+  setBodyWeight(state, day, String(Math.max(step, round(base + direction * step))), now);
 }
 
 // ---------- the exercise in progress ----------
@@ -708,4 +737,108 @@ export function historyByDay(state) {
   return [...days.entries()]
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
     .map(([day, blocks]) => ({ day, blocks, bodyWeight: bodyWeightOn(state, day) }));
+}
+
+// ---------- sync between devices ----------
+//
+// What devices share: machines, sets, body weights and deletions. Each
+// machine carries updatedAt and each body weight at; deletions are
+// tombstones. Prefs and the exercise in progress stay on each device.
+
+export function syncDoc(state) {
+  return {
+    schema: SCHEMA,
+    machines: state.machines,
+    sets: state.sets,
+    bodyWeights: state.bodyWeights,
+    tombstones: state.tombstones,
+  };
+}
+
+// A shared document read from elsewhere, checked and brought up to date like
+// stored data. Returns null when it is not Myo data.
+export function parseDoc(input) {
+  const s = parseState(input);
+  return s && syncDoc(s);
+}
+
+// Merges two shared documents. Sets: all of both, except deleted ones.
+// Machines: per machine the more recently changed one. Body weights: per
+// day the more recent entry, unless deleted later. dropUntouchedLocal is for
+// a device's first sync: its default machines that were never changed or
+// used are left out in favour of the other device's.
+export function mergeDocs(local, remote, { dropUntouchedLocal = false } = {}) {
+  if (!remote) return local;
+  const tombstones = { ...remote.tombstones };
+  for (const [key, at] of Object.entries(local.tombstones)) tombstones[key] = Math.max(at, tombstones[key] ?? at);
+  const sortedTombstones = {};
+  for (const key of Object.keys(tombstones).sort()) sortedTombstones[key] = tombstones[key];
+  const alive = (id) => !(id in tombstones);
+
+  const setsById = new Map();
+  for (const s of [...remote.sets, ...local.sets]) if (alive(s.id)) setsById.set(s.id, s);
+  const sets = [...setsById.values()].sort((a, b) => a.endedAt - b.endedAt || (a.id < b.id ? -1 : 1));
+
+  const used = new Set(sets.map((s) => s.machineId));
+  const remoteById = new Map(remote.machines.map((m) => [m.id, m]));
+  const machines = [];
+  for (const m of local.machines) {
+    const r = remoteById.get(m.id);
+    remoteById.delete(m.id);
+    if (!alive(m.id)) continue;
+    if (!r && dropUntouchedLocal && !m.updatedAt && !used.has(m.id)) continue;
+    machines.push(r && r.updatedAt > m.updatedAt ? r : m);
+  }
+  for (const r of remoteById.values()) if (alive(r.id)) machines.push(r);
+
+  const byDay = new Map();
+  for (const w of [...remote.bodyWeights, ...local.bodyWeights]) {
+    const cur = byDay.get(w.day);
+    if (!cur || w.at >= cur.at) byDay.set(w.day, w);
+  }
+  const bodyWeights = [...byDay.values()]
+    .filter((w) => !(tombstones[`bw:${w.day}`] >= w.at))
+    .sort((a, b) => (a.day < b.day ? -1 : 1));
+
+  return { schema: SCHEMA, machines, sets, bodyWeights, tombstones: sortedTombstones };
+}
+
+// The local state with the shared data of doc; prefs and the exercise in
+// progress are kept (the exercise ends if its machine is gone).
+export function applyDoc(state, doc) {
+  const next = { ...state, machines: doc.machines, sets: doc.sets, bodyWeights: doc.bodyWeights, tombstones: doc.tombstones };
+  if (next.active && !doc.machines.some((m) => m.id === next.active.machineId)) next.active = null;
+  return next;
+}
+
+// JSON with object keys sorted, to compare documents regardless of the order
+// in which their keys were created.
+export function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .filter((k) => value[k] !== undefined)
+      .map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const fingerprint = (m) => stableJson({ ...m, updatedAt: undefined });
+
+export function machineFingerprints(state) {
+  return new Map(state.machines.map((m) => [m.id, fingerprint(m)]));
+}
+
+// Sets updatedAt on machines that changed since the given fingerprints were
+// taken. Returns the new fingerprints.
+export function stampMachines(state, fingerprints, now) {
+  const next = new Map();
+  for (const m of state.machines) {
+    const fp = fingerprint(m);
+    if (fingerprints.get(m.id) !== fp) m.updatedAt = now;
+    next.set(m.id, fp);
+  }
+  return next;
 }

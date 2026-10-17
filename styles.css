@@ -1080,7 +1080,8 @@ div.plate {
   font-weight: 600;
 }
 
-.edit input[type="text"] {
+.edit input[type="text"],
+.edit input[type="password"] {
   width: 100%;
   min-width: 0;
   min-height: var(--tap);
@@ -1161,6 +1162,39 @@ div.plate {
 .draft-hint {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.sync {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.sync p {
+  margin: 0;
+}
+
+.steps {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding-left: 1.3rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.steps a {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.notice-link {
+  width: 100%;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .danger-zone {
