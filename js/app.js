@@ -901,8 +901,8 @@ function syncSection() {
     ${head}
     <p class="field-note">${t('sync.intro')}</p>
     <ol class="steps">
-      <li>${t('sync.step1')}</li>
-      <li>${t('sync.step2')} <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a></li>
+      <li>${t('sync.step1')} <a href="https://github.com/new?name=myo-data&amp;visibility=private" target="_blank" rel="noopener">github.com/new</a></li>
+      <li>${t('sync.step2')} <a href="https://github.com/settings/personal-access-tokens/new?name=Myo&amp;description=Myo+sync&amp;expires_in=366&amp;contents=write" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a></li>
       <li>${t('sync.step3')}</li>
     </ol>
     <form id="sync-form" class="edit sync-form" novalidate>

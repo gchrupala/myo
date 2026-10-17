@@ -150,8 +150,8 @@ const STRINGS = {
 
     'sync.title': 'Synchronizacja z GitHubem',
     'sync.intro': 'Dane trafiają do pliku myo.json w Twoim prywatnym repozytorium i stamtąd na inne urządzenia. Każda zmiana to commit, więc zostaje historia.',
-    'sync.step1': 'Załóż na GitHubie prywatne repozytorium, np. myo-data.',
-    'sync.step2': 'Utwórz token (fine-grained) z dostępem tylko do tego repozytorium i uprawnieniem Contents: Read and write:',
+    'sync.step1': 'Załóż na GitHubie prywatne repozytorium (z plikiem README), np. myo-data:',
+    'sync.step2': 'Utwórz token: link wypełnia uprawnienie Contents: Read and write i ważność na rok; w „Repository access” wybierz tylko to repozytorium:',
     'sync.step3': 'Wpisz poniżej nazwę repozytorium i token.',
     'sync.repo': 'Repozytorium',
     'sync.token': 'Token',
@@ -308,8 +308,8 @@ const STRINGS = {
 
     'sync.title': 'Sync with GitHub',
     'sync.intro': 'Your data goes to a myo.json file in your private repository and from there to your other devices. Every change is a commit, so the history is kept.',
-    'sync.step1': 'Create a private repository on GitHub, e.g. myo-data.',
-    'sync.step2': 'Create a fine-grained token with access to that repository only and the Contents: Read and write permission:',
+    'sync.step1': 'Create a private repository on GitHub (with a README file), e.g. myo-data:',
+    'sync.step2': 'Create a token: the link fills in the Contents: Read and write permission and a one-year expiry; under “Repository access” select only that repository:',
     'sync.step3': 'Enter the repository name and the token below.',
     'sync.repo': 'Repository',
     'sync.token': 'Token',
@@ -466,8 +466,8 @@ const STRINGS = {
 
     'sync.title': 'Sincronización con GitHub',
     'sync.intro': 'Los datos se guardan en un archivo myo.json de tu repositorio privado y de ahí pasan a tus otros dispositivos. Cada cambio es un commit, así que queda el historial.',
-    'sync.step1': 'Crea un repositorio privado en GitHub, p. ej. myo-data.',
-    'sync.step2': 'Crea un token (fine-grained) con acceso solo a ese repositorio y el permiso Contents: Read and write:',
+    'sync.step1': 'Crea un repositorio privado en GitHub (con un archivo README), p. ej. myo-data:',
+    'sync.step2': 'Crea un token: el enlace rellena el permiso Contents: Read and write y una caducidad de un año; en «Repository access» elige solo ese repositorio:',
     'sync.step3': 'Escribe abajo el nombre del repositorio y el token.',
     'sync.repo': 'Repositorio',
     'sync.token': 'Token',

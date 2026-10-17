@@ -34,8 +34,8 @@ Dane są zapisane w przeglądarce na telefonie (`localStorage`). Nie ma serwera 
 
 W ustawieniach (koło zębate) można połączyć aplikację z prywatnym repozytorium na GitHubie. Dane trafiają wtedy do pliku `myo.json` w tym repozytorium i stamtąd na inne urządzenia połączone z tym samym repozytorium. Każda synchronizacja to commit, więc zostaje historia zmian.
 
-1. Załóż prywatne repozytorium, np. `myo-data`. Publicznego aplikacja nie przyjmie, bo dane zawierają m.in. wagę ciała.
-2. Utwórz token na [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new): „Repository access” → „Only select repositories” → to repozytorium; „Permissions” → „Contents” → „Read and write”. Ważność tokena ustawiasz sam (np. rok); po wygaśnięciu aplikacja pokaże komunikat.
+1. Załóż prywatne repozytorium z plikiem README, np. `myo-data`: [github.com/new?name=myo-data&visibility=private](https://github.com/new?name=myo-data&visibility=private). Publicznego aplikacja nie przyjmie, bo dane zawierają m.in. wagę ciała.
+2. Utwórz token: [ten link](https://github.com/settings/personal-access-tokens/new?name=Myo&description=Myo+sync&expires_in=366&contents=write) wypełnia nazwę, ważność na rok i uprawnienie „Contents: Read and write”. Sam wybierz w „Repository access” → „Only select repositories” to repozytorium. Po wygaśnięciu tokena aplikacja pokaże komunikat.
 3. W aplikacji: Ustawienia → Synchronizacja z GitHubem → wpisz `właściciel/nazwa` repozytorium i token → „Połącz”.
 
 Kiedy aplikacja synchronizuje: po otwarciu, po powrocie do niej, kilkanaście sekund po każdej zmianie, po odzyskaniu internetu i na żądanie („Synchronizuj teraz”). Bez internetu zmiany czekają.
