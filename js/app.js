@@ -65,6 +65,7 @@ function persist() {
 
 const SYNC_KEY = 'myo:sync';
 const SYNC_DELAY = 15000; // after a change, wait for more before pushing
+const DEFAULT_SYNC_REPO = 'gchrupala/myo-data';
 let syncConfig = loadSyncConfig();
 const sync = { busy: false, again: false, timer: 0 };
 
@@ -908,11 +909,11 @@ function syncSection() {
     <form id="sync-form" class="edit sync-form" novalidate>
       <div class="form-row">
         <label for="sync-repo">${t('sync.repo')}</label>
-        <input id="sync-repo" type="text" placeholder="gchrupala/myo-data" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(ui.syncRepo ?? '')}">
+        <input id="sync-repo" type="text" placeholder="${t('sync.repoPlaceholder')}" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(ui.syncRepo ?? DEFAULT_SYNC_REPO)}">
       </div>
       <div class="form-row">
         <label for="sync-token">${t('sync.token')}</label>
-        <input id="sync-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(ui.syncToken ?? '')}">
+        <input id="sync-token" class="token" type="text" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(ui.syncToken ?? '')}">
       </div>
       ${errorHtml}
       <button class="btn primary wide" type="submit"${ui.syncConnecting ? ' disabled' : ''}>${t(ui.syncConnecting ? 'sync.connecting' : 'sync.connect')}</button>

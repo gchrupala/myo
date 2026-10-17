@@ -1080,6 +1080,11 @@ div.plate {
   font-weight: 600;
 }
 
+.edit input.token {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
 .edit input[type="text"],
 .edit input[type="password"] {
   width: 100%;
