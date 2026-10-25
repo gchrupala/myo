@@ -32,17 +32,29 @@ Dane są zapisane w przeglądarce na telefonie (`localStorage`). Nie ma serwera 
 
 ### Synchronizacja z GitHubem
 
-W ustawieniach (koło zębate) można połączyć aplikację z prywatnym repozytorium na GitHubie. Dane trafiają wtedy do pliku `myo.json` w tym repozytorium i stamtąd na inne urządzenia połączone z tym samym repozytorium. Każda synchronizacja to commit, więc zostaje historia zmian.
+W ustawieniach (koło zębate) można połączyć aplikację z prywatnym repozytorium na GitHubie. Dane trafiają wtedy do pliku `<imię>/myo.json` w tym repozytorium i stamtąd na inne urządzenia połączone z tym samym repozytorium i tym samym imieniem. Każda synchronizacja to commit, więc zostaje historia zmian.
 
-1. Załóż prywatne repozytorium z plikiem README, np. `myo-data`: [github.com/new?name=myo-data&visibility=private](https://github.com/new?name=myo-data&visibility=private). Publicznego aplikacja nie przyjmie, bo dane zawierają m.in. wagę ciała.
-2. Utwórz token: [ten link](https://github.com/settings/personal-access-tokens/new?name=Myo&description=Myo+sync&expires_in=366&contents=write) wypełnia nazwę, ważność na rok i uprawnienie „Contents: Read and write”. Sam wybierz w „Repository access” → „Only select repositories” to repozytorium. Po wygaśnięciu tokena aplikacja pokaże komunikat.
-3. W aplikacji: Ustawienia → Synchronizacja z GitHubem → wpisz `właściciel/nazwa` repozytorium i token → „Połącz”.
+Jedno repozytorium może przechowywać dane kilku osób i kilku aplikacji. Każda osoba ma w nim folder, a każda aplikacja plik w tym folderze:
+
+```
+grzegorz/myo.json
+grzegorz/maxapki.json
+zosia/maxapki.json
+```
+
+Folder to imię wpisane przy łączeniu, małymi literami, z każdym znakiem innym niż litera i cyfra zamienionym na łącznik („Grzegorz Chrupała” daje `grzegorz-chrupała`). [MaxApki](https://github.com/gchrupala/Anki) stosuje tę samą zasadę, więc to samo imię daje ten sam folder w obu aplikacjach.
+
+1. Załóż prywatne repozytorium, np. `app-data`: [github.com/new?name=app-data&visibility=private](https://github.com/new?name=app-data&visibility=private), albo użyj tego, w którym są już dane innych osób lub aplikacji. Publicznego aplikacja nie przyjmie, bo dane zawierają m.in. wagę ciała.
+2. Utwórz token: [ten link](https://github.com/settings/personal-access-tokens/new?name=Myo&description=Myo+sync&expires_in=366&contents=write) wypełnia nazwę, ważność na rok i uprawnienie „Contents: Read and write”. Sam wybierz w „Repository access” → „Only select repositories” to repozytorium. Po wygaśnięciu tokena aplikacja pokaże komunikat. Token fine-grained sięga tylko do repozytoriów konta (lub organizacji), które go utworzyło, więc tokeny wszystkich osób korzystających z repozytorium na Twoim koncie tworzysz Ty. Jeden token może służyć wszystkim aplikacjom na danym urządzeniu.
+3. W aplikacji: Ustawienia → Synchronizacja z GitHubem → wpisz `właściciel/nazwa` repozytorium, imię i token → „Połącz”.
+
+Połączenie z wersji sprzed folderów (bez imienia) nie synchronizuje. Formularz podpowiada wtedy dawne repozytorium i token; wystarczy wpisać imię. Dane z telefonu trafiają wtedy do `<imię>/myo.json`, a dawny plik `myo.json` nie jest już używany.
 
 Kiedy aplikacja synchronizuje: po otwarciu, po powrocie do niej, kilkanaście sekund po każdej zmianie, po odzyskaniu internetu i na żądanie („Synchronizuj teraz”). Bez internetu zmiany czekają.
 
 Jak łączy dane z kilku urządzeń: serie z obu urządzeń zostają (usunięte serie zostają usunięte), przy maszynach wygrywa wersja zmieniona później, przy wadze ciała wygrywa nowszy wpis z danego dnia. Urządzenie łączone po raz pierwszy z repozytorium, w którym są już dane, przejmuje stamtąd maszyny zamiast swoich domyślnych. Język, dźwięk i trwające ćwiczenie zostają na każdym urządzeniu osobno.
 
-Token jest zapisany tylko w przeglądarce tego urządzenia, osobno od danych: nie trafia do repozytorium ani do kopii danych. „Odłącz” go usuwa.
+Token jest zapisany tylko w przeglądarce tego urządzenia, osobno od danych: nie trafia do repozytorium ani do kopii danych. „Odłącz” go usuwa. Token pozwala czytać i zmieniać całe repozytorium: GitHub nie ma uprawnień do pojedynczych folderów, więc każdy, kto ma token do wspólnego repozytorium, może czytać i nadpisywać dane wszystkich osób, w tym ich wagę. Wspólne repozytorium ma sens w rodzinie; inne osoby powinny mieć własne.
 
 ## Uruchomienie z tego repozytorium (GitHub Pages)
 

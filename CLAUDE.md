@@ -14,7 +14,7 @@ Aplikacja webowa (PWA) do zapisywania treningu na maszynach: ustawienia maszyn, 
 - `js/format.js`: formatowanie czasu, liczb, dat i podsumowań w bieżącym języku.
 - `js/i18n.js`: teksty interfejsu po polsku, angielsku i hiszpańsku oraz tłumaczenia domyślnych nazw maszyn i ustawień.
 - `js/app.js`: widoki i obsługa zdarzeń.
-- `js/sync.js`: synchronizacja z plikiem `myo.json` w prywatnym repozytorium GitHub przez API (token fine-grained). Łączenie danych (`mergeDocs`) jest w `store.js`.
+- `js/sync.js`: synchronizacja z plikiem `<osoba>/myo.json` w prywatnym repozytorium GitHub przez API (token fine-grained). Repozytorium może być wspólne dla kilku osób i aplikacji (np. `<osoba>/maxapki.json` z MaxApki); `parsePerson` musi zamieniać imię na folder tak samo jak w MaxApki (`backup.js` w gchrupala/Anki). Łączenie danych (`mergeDocs`) jest w `store.js`.
 - `sw.js`: service worker. Nowe pliki aplikacji dopisz do `APP_FILES`. Przy każdej zmianie plików aplikacji podbij `VERSION`, inaczej telefony zostaną przy starej wersji z pamięci podręcznej.
 - `test/`: testy `node --test` dla `store.js`, `format.js`, `i18n.js` i `sync.js`.
 

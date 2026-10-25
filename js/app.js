@@ -13,7 +13,7 @@ import {
   summarizeSets,
 } from './format.js';
 import { LANGUAGES, language, nameFor, resolveLanguage, setLanguage, t } from './i18n.js';
-import { gitHubRemote, parseRepo, syncOnce } from './sync.js';
+import { gitHubRemote, parsePerson, parseRepo, syncOnce, syncPath } from './sync.js';
 
 const REST_PRESETS = [45, 60, 90, 120, 180];
 
@@ -60,8 +60,9 @@ function persist() {
 
 // ---------- sync with GitHub ----------
 //
-// The connection (repository and token) is kept on this device only, under
-// its own key, so it never goes into a backup file or into the shared data.
+// The connection (repository, person and token) is kept on this device
+// only, under its own key, so it never goes into a backup file or into the
+// shared data. The data go to <person>/myo.json in the repository.
 
 const SYNC_KEY = 'myo:sync';
 const SYNC_DELAY = 15000; // after a change, wait for more before pushing
@@ -72,11 +73,17 @@ const sync = { busy: false, again: false, timer: 0 };
 function loadSyncConfig() {
   try {
     const c = JSON.parse(storage?.getItem(SYNC_KEY) ?? 'null');
-    return c?.repo && c?.token ? c : null;
+    if (c?.repo && c?.token && c?.person) return c;
+    // A connection from before there was a folder per person: the form
+    // offers its repository and token, and asks for the name.
+    if (c?.repo && c?.token) Object.assign(ui, { syncRepo: c.repo, syncToken: c.token });
+    return null;
   } catch {
     return null;
   }
 }
+
+const remoteFor = (c) => gitHubRemote({ repo: c.repo, token: c.token, path: syncPath(c.person) });
 
 function saveSyncConfig() {
   try {
@@ -107,7 +114,7 @@ async function syncNow() {
   let result = { error: null };
   try {
     await syncOnce({
-      remote: gitHubRemote(config),
+      remote: remoteFor(config),
       getLocal: () => S.syncDoc(state),
       apply: (doc) => {
         state = S.applyDoc(state, doc);
@@ -136,11 +143,13 @@ async function syncNow() {
   }
 }
 
-async function connectSync(repoInput, tokenInput) {
+async function connectSync(repoInput, personInput, tokenInput) {
   const repo = parseRepo(repoInput);
+  const person = parsePerson(personInput);
   const token = String(tokenInput ?? '').trim();
-  Object.assign(ui, { syncRepo: repoInput, syncToken: token, syncError: null });
+  Object.assign(ui, { syncRepo: repoInput, syncPerson: personInput, syncToken: token, syncError: null });
   if (!repo) ui.syncError = 'repoFormat';
+  else if (!person) ui.syncError = 'person';
   else if (!token) ui.syncError = 'token';
   if (ui.syncError) {
     render();
@@ -149,10 +158,10 @@ async function connectSync(repoInput, tokenInput) {
   ui.syncConnecting = true;
   render();
   try {
-    await gitHubRemote({ repo, token }).checkRepo();
-    syncConfig = { repo, token, synced: false, lastSyncAt: null, error: null };
+    await remoteFor({ repo, person, token }).checkRepo();
+    syncConfig = { repo, person, token, synced: false, lastSyncAt: null, error: null };
     saveSyncConfig();
-    Object.assign(ui, { syncRepo: null, syncToken: null, syncConnecting: false });
+    Object.assign(ui, { syncRepo: null, syncPerson: null, syncToken: null, syncConnecting: false });
     await syncNow();
   } catch (e) {
     Object.assign(ui, { syncError: e?.kind ?? 'bad', syncConnecting: false });
@@ -888,7 +897,7 @@ function syncSection() {
     const confirming = ui.confirm === 'sync-off';
     return `<section class="sync" aria-labelledby="sync-label">
       ${head}
-      <p>${esc(t('sync.connected', { repo: c.repo }))}</p>
+      <p>${esc(t('sync.connected', { repo: c.repo, file: syncPath(c.person) }))}</p>
       <p class="field-note">${esc(status)}</p>
       ${errorHtml}
       <div class="controls">
@@ -900,9 +909,9 @@ function syncSection() {
   }
   return `<section class="sync" aria-labelledby="sync-label">
     ${head}
-    <p class="field-note">${t('sync.intro')}</p>
+    <p class="field-note">${esc(t('sync.intro'))}</p>
     <ol class="steps">
-      <li>${t('sync.step1')} <a href="https://github.com/new?name=myo-data&amp;visibility=private" target="_blank" rel="noopener">github.com/new</a></li>
+      <li>${t('sync.step1')} <a href="https://github.com/new?name=app-data&amp;visibility=private" target="_blank" rel="noopener">github.com/new</a></li>
       <li>${t('sync.step2')} <a href="https://github.com/settings/personal-access-tokens/new?name=Myo&amp;description=Myo+sync&amp;expires_in=366&amp;contents=write" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a></li>
       <li>${t('sync.step3')}</li>
     </ol>
@@ -910,6 +919,10 @@ function syncSection() {
       <div class="form-row">
         <label for="sync-repo">${t('sync.repo')}</label>
         <input id="sync-repo" type="text" placeholder="${t('sync.repoPlaceholder')}" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(ui.syncRepo ?? DEFAULT_SYNC_REPO)}">
+      </div>
+      <div class="form-row">
+        <label for="sync-person">${t('sync.person')}</label>
+        <input id="sync-person" type="text" placeholder="${t('sync.personPlaceholder')}" autocomplete="off" spellcheck="false" value="${esc(ui.syncPerson ?? '')}">
       </div>
       <div class="form-row">
         <label for="sync-token">${t('sync.token')}</label>
@@ -1267,7 +1280,11 @@ app.addEventListener('submit', (e) => {
   e.preventDefault();
   if (e.target.id === 'edit-form') saveDraft();
   if (e.target.id === 'sync-form') {
-    connectSync(document.getElementById('sync-repo')?.value, document.getElementById('sync-token')?.value);
+    connectSync(
+      document.getElementById('sync-repo')?.value,
+      document.getElementById('sync-person')?.value,
+      document.getElementById('sync-token')?.value,
+    );
   }
 });
 

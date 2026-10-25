@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as S from '../js/store.js';
-import { fromBase64, gitHubRemote, parseRepo, SyncError, syncOnce, toBase64 } from '../js/sync.js';
+import { fromBase64, gitHubRemote, parsePerson, parseRepo, SyncError, syncOnce, syncPath, toBase64 } from '../js/sync.js';
 
 const T0 = new Date(2026, 9, 17, 18, 0, 0).getTime();
 const sec = (n) => T0 + n * 1000;
@@ -54,6 +54,21 @@ test('repository names and base64 with Polish letters', () => {
   assert.equal(parseRepo('a/b/c'), null);
   const text = '{"name":"Wyciskanie nad głową, żółć"}';
   assert.equal(fromBase64(toBase64(text)), text);
+});
+
+// The same cases as in MaxApki (tests/backup.test.js there): a name must
+// give the same folder in every app that shares the repository.
+test('names of people become the names of their folders', () => {
+  assert.equal(parsePerson('Zosia'), 'zosia');
+  assert.equal(parsePerson(' Grzegorz  Chrupała '), 'grzegorz-chrupała');
+  assert.equal(parsePerson('Jan-Piet de Vries!'), 'jan-piet-de-vries');
+  assert.equal(parsePerson('a/b'), 'a-b');
+  assert.equal(parsePerson('مریم'), 'مریم');
+  assert.equal(parsePerson('Zoe\u0301'), parsePerson('Zoé'));
+  assert.equal(parsePerson('x'.repeat(60)).length, 40);
+  assert.equal(parsePerson(' - / '), null);
+  assert.equal(parsePerson(undefined), null);
+  assert.equal(syncPath('grzegorz'), 'grzegorz/myo.json');
 });
 
 test('first device uploads, second device gets its data without duplicate machines', async () => {
@@ -192,10 +207,11 @@ test('gitHubRemote talks to the contents API', async () => {
     }
     return stored ? json(200, { content: stored.content, sha: stored.sha }) : json(404, {});
   };
-  const remote = gitHubRemote({ repo: 'me/data', token: 'tok', fetch });
+  const path = syncPath(parsePerson('Łucja'));
+  const remote = gitHubRemote({ repo: 'me/data', token: 'tok', path, fetch });
   await remote.checkRepo();
-  await assert.rejects(gitHubRemote({ repo: 'me/open', token: 'tok', fetch }).checkRepo(), { kind: 'public' });
-  await assert.rejects(gitHubRemote({ repo: 'me/gone', token: 'tok', fetch }).checkRepo(), { kind: 'notFound' });
+  await assert.rejects(gitHubRemote({ repo: 'me/open', token: 'tok', path, fetch }).checkRepo(), { kind: 'public' });
+  await assert.rejects(gitHubRemote({ repo: 'me/gone', token: 'tok', path, fetch }).checkRepo(), { kind: 'notFound' });
 
   assert.equal(await remote.pull(), null);
   const doc = { machines: [{ name: 'Wyciskanie nad głowę' }] };
@@ -204,10 +220,10 @@ test('gitHubRemote talks to the contents API', async () => {
   assert.deepEqual(pulled, { doc, sha });
   await assert.rejects(remote.push(doc, 'old', 'second'), { kind: 'conflict' });
 
-  const get = calls.find((c) => c.method === 'GET' && c.url.includes('/contents/myo.json'));
+  const get = calls.find((c) => c.method === 'GET' && c.url.endsWith('/repos/me/data/contents/%C5%82ucja/myo.json'));
   assert.equal(get.headers.Authorization, 'Bearer tok');
   assert.equal(get.cache, 'no-store');
 
-  const offline = gitHubRemote({ repo: 'me/data', token: 'tok', fetch: async () => { throw new TypeError('Failed to fetch'); } });
+  const offline = gitHubRemote({ repo: 'me/data', token: 'tok', path, fetch: async () => { throw new TypeError('Failed to fetch'); } });
   await assert.rejects(offline.pull(), { kind: 'network' });
 });

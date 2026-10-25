@@ -1,11 +1,17 @@
 // Sync with a JSON file in a private GitHub repository, through the GitHub
 // REST API and a fine-grained personal access token. Each push is a commit,
 // so the repository keeps the history of the data.
+//
+// One repository can hold the data of several people and apps: each person
+// has a folder, and each app a file in it, such as grzegorz/myo.json and
+// zosia/maxapki.json (MaxApki, https://github.com/gchrupala/Anki).
+// parsePerson turns a name into the name of the folder, the same way in all
+// the apps.
 
 import { mergeDocs, parseDoc, stableJson } from './store.js';
 
 const API = 'https://api.github.com';
-export const SYNC_PATH = 'myo.json';
+export const SYNC_FILE = 'myo.json';
 
 // kind: 'auth' (bad or expired token), 'forbidden' (no write access),
 // 'notFound' (no such repository or no access to it), 'public' (the
@@ -32,6 +38,26 @@ export function parseRepo(input) {
   return /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(s) ? s : null;
 }
 
+// A person's name -> the name of their folder: lower case, letters and
+// digits of any script, anything else as a single hyphen; null when nothing
+// is left. The same in every app that shares the repository.
+export function parsePerson(input) {
+  const s = String(input ?? '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-+/, '')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+  return s || null;
+}
+
+// The data file of a person (a name from parsePerson).
+export const syncPath = (person) => `${person}/${SYNC_FILE}`;
+
+// A path in the repository, for an address: each part encoded.
+const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
+
 // UTF-8 text <-> base64, which the contents API uses.
 export function toBase64(text) {
   const bytes = new TextEncoder().encode(text);
@@ -45,13 +71,13 @@ export function fromBase64(b64) {
   return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
 }
 
-export function gitHubRemote({ repo, token, path = SYNC_PATH, fetch: fetchFn = (...a) => globalThis.fetch(...a) }) {
+export function gitHubRemote({ repo, token, path, fetch: fetchFn = (...a) => globalThis.fetch(...a) }) {
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   };
-  const fileUrl = `${API}/repos/${repo}/contents/${encodeURIComponent(path)}`;
+  const fileUrl = `${API}/repos/${repo}/contents/${encodePath(path)}`;
 
   // no-store: a cached GET would return an old sha right after a push.
   async function call(url, options = {}) {
