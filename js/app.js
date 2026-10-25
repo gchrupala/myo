@@ -66,7 +66,7 @@ function persist() {
 
 const SYNC_KEY = 'myo:sync';
 const SYNC_DELAY = 15000; // after a change, wait for more before pushing
-const DEFAULT_SYNC_REPO = 'gchrupala/myo-data';
+const DEFAULT_SYNC_REPO = 'gchrupala/app-data';
 let syncConfig = loadSyncConfig();
 const sync = { busy: false, again: false, timer: 0 };
 

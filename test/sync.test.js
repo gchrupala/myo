@@ -48,9 +48,9 @@ function device(state = S.createState()) {
 }
 
 test('repository names and base64 with Polish letters', () => {
-  assert.equal(parseRepo('gchrupala/myo-data'), 'gchrupala/myo-data');
-  assert.equal(parseRepo(' https://github.com/gchrupala/myo-data.git/ '), 'gchrupala/myo-data');
-  assert.equal(parseRepo('myo-data'), null);
+  assert.equal(parseRepo('gchrupala/app-data'), 'gchrupala/app-data');
+  assert.equal(parseRepo(' https://github.com/gchrupala/app-data.git/ '), 'gchrupala/app-data');
+  assert.equal(parseRepo('app-data'), null);
   assert.equal(parseRepo('a/b/c'), null);
   const text = '{"name":"Wyciskanie nad głową, żółć"}';
   assert.equal(fromBase64(toBase64(text)), text);
