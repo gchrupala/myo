@@ -61,6 +61,19 @@ test('saving a set records reps and settings and starts the rest', () => {
   assert.equal(state.sets.length, 2);
 });
 
+test('the rest before a set: the rest target, or less when the set came sooner', () => {
+  const { state, row } = fresh();
+  const chin = state.machines.find((m) => m.name === 'Podciąganie');
+  assert.equal(S.saveSet(state, row.id, sec(0)).restBeforeSec, null);
+  assert.equal(S.saveSet(state, row.id, sec(150)).restBeforeSec, S.DEFAULT_REST);
+  assert.equal(S.saveSet(state, row.id, sec(210.4)).restBeforeSec, 60);
+  S.setRestTarget(state, row.id, 120, sec(211));
+  assert.equal(S.saveSet(state, row.id, sec(400)).restBeforeSec, 120);
+  // Another machine in between: no rest before its first set or after it.
+  assert.equal(S.saveSet(state, chin.id, sec(500)).restBeforeSec, null);
+  assert.equal(S.saveSet(state, row.id, sec(600)).restBeforeSec, null);
+});
+
 test('reps: whole numbers from 1 to 999, remembered per machine', () => {
   const { state, row } = fresh();
   const chin = state.machines.find((m) => m.name === 'Podciąganie');

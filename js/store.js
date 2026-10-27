@@ -602,10 +602,13 @@ export function stepReps(state, machineId, direction) {
 }
 
 // Saves a set with the current reps and settings and starts the rest.
+// The next set starts without a tap, so its rest is taken as the machine's
+// rest target, or the time since the previous set when that was shorter.
 export function saveSet(state, machineId, now) {
   const m = getMachine(state, machineId);
   if (!m || m.type !== 'strength') return null;
   const a = startExercise(state, machineId, now);
+  const rest = a.phase === 'rest' ? Math.round(Math.min(m.restTarget, restElapsedSec(a, now))) : null;
   const set = {
     id: newId('s'),
     machineId: m.id,
@@ -615,7 +618,7 @@ export function saveSet(state, machineId, now) {
     endedAt: now,
     reps: repsFor(state, machineId),
     durationSec: null,
-    restBeforeSec: null,
+    restBeforeSec: rest,
     settings: snapshot(m),
   };
   state.sets.push(set);
