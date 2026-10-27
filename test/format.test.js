@@ -45,6 +45,7 @@ test('formatSettings skips empty values and labels unitless ones', () => {
   const stack = { label: 'Ciężar', kind: 'stack', unit: 'kg', value: 25.4, plateKg: 24.5, plateLb: 52.5, dial: 2, dialUnit: 'lb' };
   assert.equal(formatSettings([stack]), '24,5 kg + 2 lb');
   assert.equal(formatSettings([{ ...stack, dial: 0 }]), '24,5 kg');
+  assert.equal(formatSettings([{ ...stack, value: -25.4, assist: true }]), 'asysta 24,5 kg + 2 lb');
   assert.equal(formatSettings([{ label: 'Ciężar', kind: 'stack', unit: 'kg', value: null }]), '');
 });
 

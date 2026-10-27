@@ -15,20 +15,22 @@
 // }
 // A field is one machine setting, of one of two kinds:
 //   number: { id, kind: 'number', label, unit, step, value }
-//   stack:  { id, kind: 'stack', label, value, dialPos, plates, dial }
+//   stack:  { id, kind: 'stack', label, value, dialPos, plates, dial, assist }
 //           A selectorized weight stack. value is the index of the pinned
 //           plate (0 = top) or null; plates describes the kg and lb labels
 //           printed beside the plates; dial is the add-on weight knob
 //           ({ count, step, unit }, value = position * step) or null.
 //           With plates.zero there is also position -1: no plate, 0 kg (the
-//           pin out, on assisted machines no assistance).
+//           pin out, on assisted machines no assistance). assist: the stack
+//           takes weight off (the assisted chin-up and dip machines), so a
+//           heavier plate makes the exercise easier.
 // Each saved set keeps a copy of the settings it was done with
 // (see fieldSnapshot).
 
 import { dayKey } from './format.js';
 
 export const STORAGE_KEY = 'myo:v1';
-export const SCHEMA = 10;
+export const SCHEMA = 11;
 export const DEFAULT_REST = 90;
 export const LB_TO_KG = 0.45359237;
 
@@ -56,6 +58,7 @@ function stackField(label = 'Ciężar') {
     dialPos: 0,
     plates: { ...DEFAULT_PLATES },
     dial: { ...DEFAULT_DIAL },
+    assist: false,
   };
 }
 const weight = () => stackField();
@@ -77,8 +80,8 @@ const HEAVY_PLATES = { count: 12, kgFirst: 4, kgStep: 9, lbFirst: 9, lbStep: 20,
 
 // Stacks and settings (plate kg + dial lb) from the session of 16 Oct 2026.
 const MACHINE_SETUP = {
-  'Podciąganie': { kg: 16.5, dial: 0, zero: true },
-  'Pompki na poręczach': { kg: 8.5, dial: 0, zero: true },
+  'Podciąganie': { kg: 16.5, dial: 0, zero: true, assist: true },
+  'Pompki na poręczach': { kg: 8.5, dial: 0, zero: true, assist: true },
   'Brzuch': { plates: HEAVY_PLATES, kg: 67, dial: 10 },
   'Wyciskanie nad głowę': { plates: EAGLE_PLATES, kg: 31.5, dial: 15 },
   'Wiosłowanie': { plates: HEAVY_PLATES, kg: 67, dial: 10 },
@@ -91,6 +94,7 @@ function applySetup(m) {
   if (!setup || !f) return m;
   if (setup.plates) f.plates = { ...setup.plates };
   if (setup.zero) f.plates.zero = true;
+  if (setup.assist) f.assist = true;
   f.value = nearestPlate(f, setup.kg);
   f.dialPos = f.dial ? clamp(Math.round(setup.dial / f.dial.step), 0, f.dial.count - 1) : 0;
   return m;
@@ -169,6 +173,7 @@ function parseField(f, schema) {
       dialPos: dial ? (intIn(f.dialPos, 0, dial.count - 1) ?? 0) : 0,
       plates,
       dial,
+      assist: f.assist === true,
     };
     // Before version 9 a stack could have a plate labelled 0 kg next to the
     // zero position, which showed two zeros.
@@ -210,7 +215,7 @@ export function parseState(input) {
         .filter((f) => f && typeof f.label === 'string')
         .map((f) => parseField(f, schema)),
     }));
-  const sets = data.sets.filter(
+  let sets = data.sets.filter(
     (s) => s && typeof s.id === 'string' && typeof s.machineId === 'string' && Number.isFinite(s.endedAt),
   );
   const bodyWeights = (Array.isArray(data.bodyWeights) ? data.bodyWeights : [])
@@ -245,6 +250,7 @@ export function parseState(input) {
       for (const f of m.fields) if (f.kind === 'stack') f.plates.zero = true;
     }
   }
+  if (schema < 11) sets = markAssist(machines, sets);
   const ids = new Set(machines.map((m) => m.id));
   let active = data.active && ids.has(data.active.machineId) ? data.active : null;
   // Before version 6 a strength exercise could be in a 'set' phase with reps
@@ -269,6 +275,28 @@ export function parseState(input) {
     active,
     prefs: { sound: data.prefs?.sound !== false, lang },
   };
+}
+
+// Version 10 logged the assistance of the chin-up and dip machines as
+// weight, so less assistance read as less weight. Their stacks are marked as
+// assisting, and the sets done on them get the assistance as negative kg
+// (see fieldSnapshot). Sets of a deleted machine go by its name.
+function markAssist(machines, sets) {
+  const labels = new Map();
+  for (const m of machines) {
+    if (MACHINE_SETUP[m.name]?.assist) for (const f of m.fields) if (f.kind === 'stack') f.assist = true;
+    labels.set(m.id, new Set(m.fields.filter((f) => f.assist).map((f) => f.label)));
+  }
+  return sets.map((s) => {
+    const assisted = labels.get(s.machineId);
+    if (!Array.isArray(s.settings) || (!assisted && !MACHINE_SETUP[s.machineName]?.assist)) return s;
+    const settings = s.settings.map((st) =>
+      st?.kind === 'stack' && st.assist === undefined && (!assisted || assisted.has(st.label))
+        ? { ...st, assist: true, value: st.value > 0 ? -st.value : st.value }
+        : st,
+    );
+    return { ...s, settings };
+  });
 }
 
 export function loadState(storage) {
@@ -416,21 +444,25 @@ export function stepDial(state, machineId, fieldId, direction) {
 }
 
 // What a saved set keeps of a setting. For a stack, value is the total in kg
-// and the rest records what was set on the machine.
+// and the rest records what was set on the machine. An assisting stack takes
+// weight off, so its value is negative: less assistance is a higher value.
 export function fieldSnapshot(f) {
   if (f.kind !== 'stack') return { label: f.label, unit: f.unit, value: f.value };
-  if (f.value === null) return { label: f.label, kind: 'stack', unit: 'kg', value: null };
+  const assist = f.assist ? { assist: true } : {};
+  if (f.value === null) return { label: f.label, kind: 'stack', unit: 'kg', value: null, ...assist };
   const w = plateWeights(f, f.value);
+  const total = stackTotalKg(f);
   return {
     label: f.label,
     kind: 'stack',
     unit: 'kg',
-    value: stackTotalKg(f),
+    value: f.assist && total > 0 ? -total : total,
     plate: f.value + 1,
     plateKg: w.kg,
     plateLb: w.lb,
     dial: dialValue(f),
     dialUnit: f.dial?.unit ?? null,
+    ...assist,
   };
 }
 
@@ -459,7 +491,7 @@ function stackFromDraft(f, prev, label) {
     }),
   );
   const dial = parseDial({ count: num(f.dial?.count), step: num(f.dial?.step), unit: f.dial?.unit });
-  const s = { id: prev?.id ?? newId('f'), kind: 'stack', label, value: null, dialPos: 0, plates, dial };
+  const s = { id: prev?.id ?? newId('f'), kind: 'stack', label, value: null, dialPos: 0, plates, dial, assist: f.assist === true };
   if (prev?.kind === 'stack') {
     s.value = prev.value === null ? null : clamp(prev.value, firstPosition(s), plates.count - 1);
     s.dialPos = dial ? Math.min(prev.dialPos, dial.count - 1) : 0;
@@ -471,7 +503,8 @@ function stackFromDraft(f, prev, label) {
 
 // Adds a machine or updates an existing one from an edit form draft:
 // { id | null, name, type, fields: [{ id | null, kind, label, unit, step,
-//   plates: { count, kgFirst, kgStep, lbFirst, lbStep }, dial: { count, step, unit } }] },
+//   plates: { count, kgFirst, kgStep, lbFirst, lbStep }, dial: { count, step, unit },
+//   assist }] },
 // with numbers as typed (strings). Existing fields keep their current values.
 export function saveMachine(state, draft, now) {
   const name = String(draft.name || '').trim();

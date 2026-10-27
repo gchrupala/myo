@@ -452,7 +452,8 @@ const KNOB_ARROWS = `<svg viewBox="0 0 100 100" aria-hidden="true">
 function stackSetting(f) {
   const id = esc(f.id);
   const snap = S.fieldSnapshot(f);
-  const total = snap.value === null ? '—' : `${formatNumber(snap.value)} kg`;
+  const kg = `${formatNumber(Math.abs(snap.value))} kg`;
+  const total = snap.value === null ? '—' : snap.assist ? t('stack.assist', { weight: kg }) : kg;
   const hint = snap.value === null ? `<p class="field-note">${t('stack.hint')}</p>` : '';
   const first = S.firstPosition(f);
   const rows = Array.from({ length: f.plates.count - first }, (_, k) => {
@@ -746,6 +747,7 @@ function draftField(f = {}) {
       lbStep: formatNumber(p.lbStep),
       zero: Boolean(p.zero),
     },
+    assist: Boolean(f.assist),
     dial: d
       ? { count: String(d.count), step: formatNumber(d.step), unit: d.unit }
       : { count: '0', step: formatNumber(S.DEFAULT_DIAL.step), unit: S.DEFAULT_DIAL.unit },
@@ -788,6 +790,7 @@ function draftFieldRow(f, i) {
             ${option('lb', 'lb', f.dial.unit)}${option('kg', 'kg', f.dial.unit)}
           </select>
           <label class="check draft-wide"><input id="d-plates-zero-${i}" type="checkbox" data-draft="plates.zero" data-i="${i}"${f.plates.zero ? ' checked' : ''}> ${t('edit.zero')}</label>
+          <label class="check draft-wide"><input id="d-assist-${i}" type="checkbox" data-draft="assist" data-i="${i}"${f.assist ? ' checked' : ''}> ${t('edit.assist')}</label>
         </div>`
       : `<div class="draft-grid">
           <label for="d-unit-${i}">${t('edit.unit')}</label>

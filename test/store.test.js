@@ -295,7 +295,7 @@ test('weight stack: labels, pin, dial and total', () => {
 
   f.value = null;
   assert.equal(S.stackTotalKg(f), null);
-  assert.deepEqual(S.fieldSnapshot(f), { label: 'Ciężar', kind: 'stack', unit: 'kg', value: null });
+  assert.deepEqual(S.fieldSnapshot(f), { label: 'Ciężar', kind: 'stack', unit: 'kg', value: null, assist: true });
 
   S.setStackPlate(state, row.id, f.id, 5);
   assert.equal(S.stackTotalKg(f), 24.5);
@@ -313,10 +313,66 @@ test('weight stack: labels, pin, dial and total', () => {
 
   S.setStackPlate(state, row.id, f.id, 2);
   S.stepDial(state, row.id, f.id, 2);
+  // The machine assists, so the set is logged as 17 kg off.
   assert.deepEqual(S.fieldSnapshot(f), {
-    label: 'Ciężar', kind: 'stack', unit: 'kg', value: 17,
-    plate: 3, plateKg: 12.5, plateLb: 27, dial: 10, dialUnit: 'lb',
+    label: 'Ciężar', kind: 'stack', unit: 'kg', value: -17,
+    plate: 3, plateKg: 12.5, plateLb: 27, dial: 10, dialUnit: 'lb', assist: true,
   });
+});
+
+test('assisted stacks: the chin-up and dip machines, logged as negative kg', () => {
+  const { state, row } = fresh();
+  const chin = state.machines.find((m) => m.name === 'Podciąganie');
+  const dips = state.machines.find((m) => m.name === 'Pompki na poręczach');
+  const assisted = state.machines.filter((m) => m.fields.some((f) => f.assist)).map((m) => m.name);
+  assert.deepEqual(assisted, ['Podciąganie', 'Pompki na poręczach']);
+  assert.equal(S.saveSet(state, chin.id, sec(0)).settings[0].value, -16.5);
+  assert.equal(S.saveSet(state, dips.id, sec(60)).settings[0].value, -8.5);
+  assert.equal(S.saveSet(state, row.id, sec(120)).settings[0].value, 71.5);
+  // Less assistance is a higher value; no assistance is 0, not -0.
+  const f = chin.fields[0];
+  S.setStackPlate(state, chin.id, f.id, 1);
+  assert.equal(S.fieldSnapshot(f).value, -8.5);
+  S.setStackPlate(state, chin.id, f.id, -1);
+  assert.ok(Object.is(S.fieldSnapshot(f).value, 0));
+});
+
+test('assisted stacks from the edit form', () => {
+  const { state, row } = fresh();
+  const draft = (assist) => ({
+    id: row.id, name: row.name, type: 'strength',
+    fields: row.fields.map((f) => ({ ...f, plates: { ...f.plates }, dial: { ...f.dial }, assist })),
+  });
+  S.saveMachine(state, draft(true), sec(0));
+  assert.equal(row.fields[0].assist, true);
+  assert.equal(S.saveSet(state, row.id, sec(1)).settings[0].value, -71.5);
+  S.saveMachine(state, draft(false), sec(2));
+  assert.equal(row.fields[0].assist, false);
+});
+
+test('version 10 data: assistance on the chin-up and dip machines becomes negative kg', () => {
+  const v10 = S.createState();
+  for (const m of v10.machines) for (const f of m.fields) delete f.assist;
+  v10.schema = 10;
+  const [chin, , abs] = v10.machines;
+  const stackSet = (id, machine, kg) => ({
+    id, machineId: machine.id, machineName: machine.name, type: 'strength', endedAt: sec(0), reps: 8,
+    settings: [{ label: 'Ciężar', kind: 'stack', unit: 'kg', value: kg, plate: 4, plateKg: kg, plateLb: 35.5, dial: 0, dialUnit: 'lb' }],
+  });
+  v10.sets = [
+    stackSet('s1', chin, 16.5),
+    stackSet('s2', abs, 72),
+    // A deleted dip machine goes by its name.
+    stackSet('s3', { id: 'm-gone', name: 'Pompki na poręczach' }, 8.5),
+  ];
+  const state = S.parseState(JSON.parse(JSON.stringify(v10)));
+  assert.equal(state.machines[0].fields[0].assist, true);
+  assert.equal(state.machines[1].fields[0].assist, true);
+  assert.equal(state.machines[2].fields[0].assist, false);
+  assert.deepEqual(state.sets.map((s) => [s.settings[0].value, s.settings[0].assist]), [[-16.5, true], [72, undefined], [-8.5, true]]);
+  assert.equal(state.sets[0].settings[0].plateKg, 16.5);
+  // Current data is left as it is.
+  assert.deepEqual(S.parseState(JSON.parse(JSON.stringify(state))).sets, state.sets);
 });
 
 test('weight stack settings from the edit form', () => {
@@ -406,8 +462,8 @@ test('version 2 data: the guessed 0/2/4/6 lb dial becomes 0/5/10/15 lb', () => {
 });
 
 const SESSION = [
-  ['Podciąganie', '16,5 kg'],
-  ['Pompki na poręczach', '8,5 kg'],
+  ['Podciąganie', 'asysta 16,5 kg'],
+  ['Pompki na poręczach', 'asysta 8,5 kg'],
   ['Brzuch', '67 kg + 10 lb'],
   ['Wyciskanie nad głowę', '31,5 kg + 15 lb'],
   ['Wiosłowanie', '67 kg + 10 lb'],
@@ -469,9 +525,9 @@ test('assisted machines: a 0 kg position above the plates', () => {
   S.setStackPlate(state, chin.id, f.id, -5);
   assert.equal(f.value, -1);
   assert.equal(S.stackTotalKg(f), 0);
-  assert.equal(formatField(S.fieldSnapshot(f)), '0 kg');
+  assert.equal(formatField(S.fieldSnapshot(f)), 'asysta 0 kg');
   S.stepDial(state, chin.id, f.id, 1);
-  assert.equal(formatField(S.fieldSnapshot(f)), '0 kg + 5 lb');
+  assert.equal(formatField(S.fieldSnapshot(f)), 'asysta 0 kg + 5 lb');
   assert.equal(S.nearestPlate(f, 1), -1);
   // Without the zero position the pin cannot go above the top plate.
   S.setStackPlate(state, row.id, row.fields[0].id, -1);

@@ -60,6 +60,7 @@ const STRINGS = {
     'ex.previous': 'Poprzednio · {day}',
 
     'stack.hint': 'Dotknij płytki, w którą wkładasz bolec.',
+    'stack.assist': 'asysta {weight}',
     'dial.name': 'Tarcza',
     'dial.less': 'Tarcza: mniej',
     'dial.more': 'Tarcza: więcej',
@@ -134,6 +135,7 @@ const STRINGS = {
     'edit.dialStep': 'Tarcza: co',
     'edit.dialUnit': 'Jednostka tarczy',
     'edit.zero': 'Pozycja 0 kg nad płytkami (np. maszyna z asystą: bez asysty)',
+    'edit.assist': 'Maszyna z asystą: większy ciężar ułatwia ćwiczenie',
     'edit.unit': 'Jednostka',
     'edit.step': 'Krok − i +',
     'edit.addField': 'Dodaj ustawienie',
@@ -222,6 +224,7 @@ const STRINGS = {
     'ex.previous': 'Previous · {day}',
 
     'stack.hint': 'Tap the plate you put the pin in.',
+    'stack.assist': 'assist {weight}',
     'dial.name': 'Dial',
     'dial.less': 'Dial: less',
     'dial.more': 'Dial: more',
@@ -296,6 +299,7 @@ const STRINGS = {
     'edit.dialStep': 'Dial: step',
     'edit.dialUnit': 'Dial unit',
     'edit.zero': 'A 0 kg position above the plates (e.g. assisted machine: no assistance)',
+    'edit.assist': 'Assisted machine: more weight makes the exercise easier',
     'edit.unit': 'Unit',
     'edit.step': 'Step for − and +',
     'edit.addField': 'Add setting',
@@ -384,6 +388,7 @@ const STRINGS = {
     'ex.previous': 'Anterior · {day}',
 
     'stack.hint': 'Toca la placa donde pones el pasador.',
+    'stack.assist': 'asistencia {weight}',
     'dial.name': 'Selector',
     'dial.less': 'Selector: menos',
     'dial.more': 'Selector: más',
@@ -458,6 +463,7 @@ const STRINGS = {
     'edit.dialStep': 'Selector: paso',
     'edit.dialUnit': 'Unidad del selector',
     'edit.zero': 'Posición de 0 kg sobre las placas (p. ej. máquina asistida: sin asistencia)',
+    'edit.assist': 'Máquina asistida: más peso facilita el ejercicio',
     'edit.unit': 'Unidad',
     'edit.step': 'Paso de − y +',
     'edit.addField': 'Añadir ajuste',

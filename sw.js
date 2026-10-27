@@ -3,7 +3,7 @@
 // Bump VERSION with every change to the app files. The browser then installs
 // this worker again with the new files, and the page reloads into them
 // (see the controllerchange handler in js/app.js).
-const VERSION = 'v14';
+const VERSION = 'v15';
 const APP_CACHE = `myo-app-${VERSION}`;
 const FONT_CACHE = 'myo-fonts';
 const APP_FILES = [
